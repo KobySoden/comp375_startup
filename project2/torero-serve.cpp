@@ -6,10 +6,9 @@
  * 	1. The port number on which to bind and listen for connections
  * 	2. The directory out of which to serve files.
  *
- * 	TODO: update author info with names and USD email addresses
  *
- * Author 1:
- * Author 2:
+ * Author 1: Kevin Mcdonald kmcdonald@sandiego.edu
+ * Author 2: Koby Soden ksoden@sandiego.edu
  */
 
 // standard C libraries
@@ -34,7 +33,7 @@
 #include <iostream>
 #include <system_error>
 #include <filesystem>
-
+#include <regex>
 // shorten the std::filesystem namespace down to just fs
 namespace fs = std::filesystem;
 
@@ -52,6 +51,7 @@ void acceptConnections(const int server_sock);
 void handleClient(const int client_sock);
 void sendData(int socked_fd, const char *data, size_t data_length);
 int receiveData(int socked_fd, char *dest, size_t buff_size);
+bool isValid(std::string request);
 
 int main(int argc, char** argv) {
 
@@ -59,6 +59,7 @@ int main(int argc, char** argv) {
 	if (argc != 3) {
 		// TODO: print a proper error message informing user of proper usage
 		cout << "INCORRECT USAGE!\n";
+		cout << "./torero-serve [Port] [WWW]\n";
 		exit(1);
 	}
 
@@ -131,12 +132,16 @@ void handleClient(const int client_sock) {
 
 	// Turn the char array into a C++ string for easier processing.
 	string request_string(received_data, bytes_received);
-	
+		
 	// TODO
 	// Step 2: Parse the request string to determine what response to generate.
 	// I recommend using regular expressions (specifically C++'s std::regex) to
 	// determine if a request is properly formatted.
+	if(!isValid(request_string)){
+cout << "Invalid GET\n";
+	}
 	
+
 	// TODO
 	// Step 3: Generate HTTP response message based on the request you received.
 	
@@ -273,4 +278,15 @@ void acceptConnections(const int server_sock) {
 		 */
 		handleClient(sock);
     }
+}
+
+bool isValid(std::string request){
+	//make regular expression matching template for get request
+	std::regex http_get_regex("(GET\\s[\\w\\-\\./]*\\sHTTP/\\d\\.\\d)");
+	std::smatch get_match;
+	//compare input string to template 
+	if (std::regex_search(request, get_match, http_get_regex)) return true;
+	return false;
+
+
 }
