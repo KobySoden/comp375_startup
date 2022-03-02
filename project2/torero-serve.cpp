@@ -88,8 +88,6 @@ int main(int argc, char** argv) {
  * @param data_length Number of bytes of data to send.
  */
 void sendData(int socked_fd, const char *data, size_t data_length) {
-	// TODO: Wrap the following code in a loop so that it keeps sending until
-	// the data has been completely sent.
 	
 	int num_bytes_sent;
 	
