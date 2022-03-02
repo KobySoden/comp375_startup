@@ -1,5 +1,5 @@
 CXX=g++
-CXXFLAGS=-Wall -Wextra -g -O1 -std=c++17 -pthread
+CXXFLAGS=-Wall -Wextra -g -O1 -std=c++17 -pthread -lstdc++fs
 
 TARGETS=torero-serve
 
