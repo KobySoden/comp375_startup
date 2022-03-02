@@ -7,7 +7,7 @@
  * 	2. The directory out of which to serve files.
  *
  *
- * Author 1: Kevin Mcdonald kmcdonald@sandiego.edu
+ * Author 1: Kevin McDonald kmcdonald@sandiego.edu
  * Author 2: Koby Soden ksoden@sandiego.edu
  */
 
@@ -34,6 +34,8 @@
 #include <system_error>
 #include <filesystem>
 #include <regex>
+#include <fstream>
+
 // shorten the std::filesystem namespace down to just fs
 namespace fs = std::filesystem;
 
@@ -45,6 +47,7 @@ using std::thread;
 // This will limit how many clients can be waiting for a connection.
 static const int BACKLOG = 10;
 
+
 // forward declarations
 int createSocketAndListen(const int port_num);
 void acceptConnections(const int server_sock);
@@ -53,6 +56,11 @@ void sendData(int socked_fd, const char *data, size_t data_length);
 int receiveData(int socked_fd, char *dest, size_t buff_size);
 bool isValid(std::string request);
 void sendBadReq(const int client_sock);
+void sendFile(const int client_sock, std::string file);
+
+
+#define BUFF_SIZE 4096
+
 
 int main(int argc, char** argv) {
 
@@ -143,9 +151,8 @@ void handleClient(const int client_sock) {
 	// I recommend using regular expressions (specifically C++'s std::regex) to
 	// determine if a request is properly formatted.
 	if(!isValid(request_string)){
-cout << "Invalid GET\n";
-	sendBadReq(client_sock);
-return;
+		sendBadReq(client_sock);
+		return;
 	}
 	
 
@@ -299,4 +306,31 @@ bool isValid(std::string request){
 void sendBadReq(const int client_sock){
 	std::string badReq = "HTTP/1.0 400 BAD REQUEST\r\n";
 	sendData(client_sock, badReq.c_str(), badReq.length());
+	std::string header = "Content-Length: ";
+	header += std::to_string(fs::file_size("WWW/400.html"));
+	header += "\r\nContent-Type: text/html\r\n\r\n";
+	sendData(client_sock, header.c_str(), header.length());
+	sendFile(client_sock, "WWW/400.html");	
 }
+
+void pageDNE (const int client_sock){
+	std::string issue = "HTTP/1.0 404 PAGE NOT FOUND";
+	sendData(client_sock, issue.c_str(), issue.length());
+	std::string header = "Content-Length: ";
+	header += std::to_string(fs::file_size("WWW/404.html"));
+	header += "\r\nContent-Type: text/html\r\n\r\n";
+	sendData(client_sock, header.c_str(), header.length());
+	sendFile(client_sock, "WWW/404.html");
+}
+
+void sendFile(const int client_sock, std::string file){
+	std::ifstream file_stream(file, std::ios::binary);
+	char data[BUFF_SIZE];
+	while(!file_stream.eof()){
+		file_stream.read(data,BUFF_SIZE);
+		int bytes = file_stream.gcount();
+		sendData(client_sock, data, bytes);
+	}
+	file_stream.close();
+	sendData(client_sock, "\r\n", sizeof("\r\n"));
+}		
