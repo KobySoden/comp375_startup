@@ -52,6 +52,7 @@ void handleClient(const int client_sock);
 void sendData(int socked_fd, const char *data, size_t data_length);
 int receiveData(int socked_fd, char *dest, size_t buff_size);
 bool isValid(std::string request);
+void sendBadReq(const int client_sock);
 
 int main(int argc, char** argv) {
 
@@ -90,10 +91,16 @@ void sendData(int socked_fd, const char *data, size_t data_length) {
 	// TODO: Wrap the following code in a loop so that it keeps sending until
 	// the data has been completely sent.
 	
-	int num_bytes_sent = send(socked_fd, data, data_length, 0);
-	if (num_bytes_sent == -1) {
-		std::error_code ec(errno, std::generic_category());
-		throw std::system_error(ec, "send failed");
+	int num_bytes_sent;
+	
+	while(data_length > 0){	
+		num_bytes_sent = send(socked_fd, data, data_length, 0);
+		if (num_bytes_sent == -1) {
+			std::error_code ec(errno, std::generic_category());
+			throw std::system_error(ec, "send failed");
+		}
+		data += num_bytes_sent;
+		data_length -= num_bytes_sent;
 	}
 }
 
@@ -139,6 +146,8 @@ void handleClient(const int client_sock) {
 	// determine if a request is properly formatted.
 	if(!isValid(request_string)){
 cout << "Invalid GET\n";
+	sendBadReq(client_sock);
+return;
 	}
 	
 
@@ -287,6 +296,9 @@ bool isValid(std::string request){
 	//compare input string to template 
 	if (std::regex_search(request, get_match, http_get_regex)) return true;
 	return false;
+}
 
-
+void sendBadReq(const int client_sock){
+	std::string badReq = "HTTP/1.0 400 BAD REQUEST\r\n";
+	sendData(client_sock, badReq.c_str(), badReq.length());
 }
