@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <unistd.h>
+#include <pthread.h>
 
 // C++ standard libraries
 #include <vector>
@@ -50,17 +51,18 @@ static const int BACKLOG = 10;
 
 // forward declarations
 int createSocketAndListen(const int port_num);
-void acceptConnections(const int server_sock);
-void handleClient(const int client_sock);
+void acceptConnections(const int server_sock, std::string curDir);
+void handleClient(const int client_sock, std::string curDir);
 void sendData(int socked_fd, const char *data, size_t data_length);
 int receiveData(int socked_fd, char *dest, size_t buff_size);
 bool isValid(std::string request);
+bool fileDNE(std::string file);
+void pageDNE(const int client_sock);
 void sendBadReq(const int client_sock);
 void sendFile(const int client_sock, std::string file);
 
 
 #define BUFF_SIZE 4096
-
 
 int main(int argc, char** argv) {
 
@@ -80,7 +82,7 @@ int main(int argc, char** argv) {
 	int server_sock = createSocketAndListen(port);
 
 	/* Now let's start accepting connections. */
-	acceptConnections(server_sock);
+	acceptConnections(server_sock, argv[2]);
 
     close(server_sock);
 
@@ -138,7 +140,7 @@ int receiveData(int socked_fd, char *dest, size_t buff_size) {
  *
  * @param client_sock The client's socket file descriptor.
  */
-void handleClient(const int client_sock) {
+void handleClient(const int client_sock, std::string curDir) {
 	// Step 1: Receive the request message from the client
 	char received_data[2048];
 	int bytes_received = receiveData(client_sock, received_data, 2048);
@@ -152,6 +154,23 @@ void handleClient(const int client_sock) {
 	// determine if a request is properly formatted.
 	if(!isValid(request_string)){
 		sendBadReq(client_sock);
+		return;
+	}
+	
+	cout << request_string + "\n";
+	
+	//get filename from http request	
+	std::istringstream s(request_string);
+	std::string file;
+
+	getline(s, file, ' ');
+	getline(s, file, ' ');
+
+	//append filename to directory
+	curDir.append(file);
+	
+	if(fileDNE(curDir)){
+		pageDNE(client_sock);
 		return;
 	}
 	
@@ -253,7 +272,7 @@ int createSocketAndListen(const int port_num) {
  *
  * @param server_sock The socket used by the server.
  */
-void acceptConnections(const int server_sock) {
+void acceptConnections(const int server_sock, std::string curDir) {
     while (true) {
         // Declare a socket for the client connection.
         int sock;
@@ -290,7 +309,7 @@ void acceptConnections(const int server_sock) {
 		 * You'll implement this shared buffer in one of the labs and can use
 		 * it directly here.
 		 */
-		handleClient(sock);
+		handleClient(sock, curDir);
     }
 }
 
@@ -303,10 +322,18 @@ bool isValid(std::string request){
 	return false;
 }
 
+bool fileDNE(std::string file){
+	//create filestream and check for errors
+	std::ifstream f(file.c_str());
+	cout <<  file + "exists:" + std::to_string(f.good()) + "\n";
+    return !f.good();
+
+}
+
 void sendBadReq(const int client_sock){
-	std::string badReq = "HTTP/1.0 400 BAD REQUEST\r\n";
+	string badReq = "HTTP/1.1 400 BAD REQUEST\r\n";
 	sendData(client_sock, badReq.c_str(), badReq.length());
-	std::string header = "Content-Length: ";
+	string header = "Content-Length: ";
 	header += std::to_string(fs::file_size("WWW/400.html"));
 	header += "\r\nContent-Type: text/html\r\n\r\n";
 	sendData(client_sock, header.c_str(), header.length());
@@ -314,9 +341,9 @@ void sendBadReq(const int client_sock){
 }
 
 void pageDNE (const int client_sock){
-	std::string issue = "HTTP/1.0 404 PAGE NOT FOUND";
+	string issue = "HTTP/1.1 404 PAGE NOT FOUND";
 	sendData(client_sock, issue.c_str(), issue.length());
-	std::string header = "Content-Length: ";
+	string header = "Content-Length: ";
 	header += std::to_string(fs::file_size("WWW/404.html"));
 	header += "\r\nContent-Type: text/html\r\n\r\n";
 	sendData(client_sock, header.c_str(), header.length());
@@ -324,13 +351,17 @@ void pageDNE (const int client_sock){
 }
 
 void sendFile(const int client_sock, std::string file){
+	cout << "sending file \n";
 	std::ifstream file_stream(file, std::ios::binary);
 	char data[BUFF_SIZE];
+	//cout << std::to_string(!file_stream.eof());
 	while(!file_stream.eof()){
 		file_stream.read(data,BUFF_SIZE);
 		int bytes = file_stream.gcount();
 		sendData(client_sock, data, bytes);
+		cout << "bytes sent"  + std::to_string(bytes)+ "\n";
 	}
 	file_stream.close();
 	sendData(client_sock, "\r\n", sizeof("\r\n"));
+	cout << "exit \n";
 }		
