@@ -1,5 +1,5 @@
 /**	
- * Quinn Bigane
+ * Koby Soden
  *
  * COMP 375 Lab04
  *
@@ -35,11 +35,9 @@ BoundedBuffer::BoundedBuffer(int max_size) {
 int BoundedBuffer::getItem() {
 	//lock aquire(lock)
 	std::unique_lock<std::mutex> lock(shared_mutex);
-	//while(count == 0) cond_wait(dataAvailable, lock)
 	while(count == 0){
 		dataAvailable.wait(lock);
 	}
-	//count--
 	count--;
 	int item = this->buffer.front(); // "this" refers to the calling object...
 	buffer.pop(); // ... but like Java it is optional (no this in front of buffer on this line)
@@ -58,11 +56,9 @@ int BoundedBuffer::getItem() {
 void BoundedBuffer::putItem(int new_item) {
 	//Lock aquire(lock)
 	std::unique_lock<std::mutex> lock(shared_mutex);
-	//While(count == Size) cond_wait (SpaceAvailable, lock)
 	while(count == capacity){
 		spaceAvailable.wait(lock);
 	}
-	//count++
 	count++;
 	buffer.push(new_item);
 	//cond_signal(dataAvailable, lock)

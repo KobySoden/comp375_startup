@@ -5,6 +5,9 @@
  * This program should take two arguments:
  * 	1. The port number on which to bind and listen for connections
  * 	2. The directory out of which to serve files.
+ * This program initializes a web server at the port specified and gives users
+ * access to the directory tree specified in argument 2. Users can view
+ * images, html files and navigate the directory specified.
  *
  *
  * Author 1: Kevin McDonald kmcdonald@sandiego.edu
@@ -68,14 +71,13 @@ void sendHeader (const int client_sock, std::string file);
 void sendDir(const int client_sock, string curDir);
 void waitForClient(BoundedBuffer &buf, string curDir);
 
-
+//buffer for sending and recieving
 #define BUFF_SIZE 4096
 
 int main(int argc, char** argv) {
 
 	/* Make sure the user called our program correctly. */
 	if (argc != 3) {
-		// TODO: print a proper error message informing user of proper usage
 		cout << "INCORRECT USAGE!\n";
 		cout << "./torero-serve [Port] [WWW]\n";
 		exit(1);
@@ -146,6 +148,7 @@ int receiveData(int socked_fd, char *dest, size_t buff_size) {
  * may not be used again).
  *
  * @param client_sock The client's socket file descriptor.
+ * @param curDir the current directory or file being examined
  */
 void handleClient(const int client_sock, std::string curDir) {
 	// Step 1: Receive the request message from the client
@@ -155,43 +158,34 @@ void handleClient(const int client_sock, std::string curDir) {
 	// Turn the char array into a C++ string for easier processing.
 	string request_string(received_data, bytes_received);
 		
-	// TODO
-	// Step 2: Parse the request string to determine what response to generate.
-	// I recommend using regular expressions (specifically C++'s std::regex) to
-	// determine if a request is properly formatted.
+	//check for valid get request.
 	if(!isValid(request_string)){
 		sendBadReq(client_sock);
+		close(client_sock);
 		return;
 	}
-	
-	cout << request_string + "\n";
 	
 	//get filename from http request	
 	std::istringstream s(request_string);
 	std::string file;
-
 	getline(s, file, ' ');
 	getline(s, file, ' ');
 
 	//append filename to directory
 	curDir.append(file);
 	
-	if(fs::is_directory(curDir)) {
-		sendDir(client_sock,curDir);
-	}
+	//check if user is requesting a directory
+	if(fs::is_directory(curDir)) sendDir(client_sock,curDir);
 	
-	else if(fileDNE(curDir)){
-		pageDNE(client_sock);
-		return;
-	}
-	sendHeader(client_sock, curDir);
-	sendFile(client_sock,curDir);	
-	// TODO
-	// Step 4: Send response to client using the sendData function.
-	// FIXME: The following line just sends back the request message, which is
-	// definitely not what you want to do.
-	sendData(client_sock, request_string.c_str(), request_string.length());
+	//check if the file exists
+	else if(fileDNE(curDir)) pageDNE(client_sock);
 	
+	//file exists and is not a directory so send the file
+	else {
+		sendHeader(client_sock, curDir);
+		sendFile(client_sock,curDir);	
+	}
+
 	// Close connection with client.
 	close(client_sock);
 }
@@ -279,13 +273,16 @@ int createSocketAndListen(const int port_num) {
  * Sit around forever accepting new connections from client.
  *
  * @param server_sock The socket used by the server.
+ * @param curDir current dirrectory for serving files
  */
 void acceptConnections(const int server_sock, std::string curDir) {
 	
 	BoundedBuffer buf(BUFF_CAP);
-    
-	for (size_t i = 0; i<MAX_THREADS; i++){
+   	
+	//create threads tell them to wait for clients
+	for (size_t i = 0; i<MAX_THREADS; ++i){
 		std::thread listener(waitForClient,std::ref(buf),curDir);
+		//release threads so that they dont have to rejoin
 		listener.detach();
 	}
 	
@@ -314,21 +311,14 @@ void acceptConnections(const int server_sock, std::string curDir) {
             exit(1);
         }
 
-        /* 
-		 * At this point, you have a connected socket (named sock) that you can
-         * use to send() and recv(). The handleClient function should handle all
-		 * of the sending and receiving to/from the client.
-		 *
-		 * TODO: You shouldn't call handleClient directly here. Instead it
-		 * should be called from a separate thread. You'll just need to put sock
-		 * in a shared buffer that is synchronized using condition variables.
-		 * You'll implement this shared buffer in one of the labs and can use
-		 * it directly here.
-		 */
+        //put sockets into buffer for threads to take out
     	buf.putItem(sock);
 	}
 }
-
+/* check for valid http formatting
+ *
+ * @param request the http request being examined
+ */
 bool isValid(std::string request){
 	//make regular expression matching template for get request
 	std::regex http_get_regex("(GET\\s[\\w\\-\\./]*\\sHTTP/\\d\\.\\d)");
@@ -337,15 +327,22 @@ bool isValid(std::string request){
 	if (std::regex_search(request, get_match, http_get_regex)) return true;
 	return false;
 }
-
+/*
+ *check if a file exists
+ *
+ * @param file relative path to a file
+ */
 bool fileDNE(std::string file){
 	//create filestream and check for errors
 	std::ifstream f(file.c_str());
-	cout <<  file + "exists:" + std::to_string(f.good()) + "\n";
     return !f.good();
 
 }
-
+/*
+ *Send HTTP 400 bad request response message
+ *
+ *@param client_sock the client socket used to send the message
+ */
 void sendBadReq(const int client_sock){
 	string badReq = "HTTP/1.1 400 BAD REQUEST\r\n";
 	sendData(client_sock, badReq.c_str(), badReq.length());
@@ -355,13 +352,12 @@ void sendBadReq(const int client_sock){
 	ack << "Content-Type: text/html\r\nContent-Lenth: " <<  error.length() << "\r\n\r\n" << error <<  "\r\n"; 
 	string fullAck = ack.str();
 	sendData(client_sock, fullAck.c_str(), fullAck.length());
-	/*string header = "Content-Length: ";
-	header += std::to_string(fs::file_size("WWW/400.html"));
-	header += "\r\nContent-Type: text/html\r\n\r\n";
-	sendData(client_sock, header.c_str(), header.length());
-	sendFile(client_sock, "WWW/400.html");*/	
 }
-
+/*
+ * send 404 error message and display web page
+ *
+ * @param client_sock the client socket being used to send the message
+ */
 void pageDNE (const int client_sock){
 	string issue = "HTTP/1.1 404 PAGE NOT FOUND";
 	sendData(client_sock, issue.c_str(), issue.length());
@@ -372,39 +368,42 @@ void pageDNE (const int client_sock){
 	string fullAck = ack.str();
 	sendData(client_sock, fullAck.c_str(), fullAck.length());
 
-	/*string issue = "HTTP/1.1 404 PAGE NOT FOUND";
-	sendData(client_sock, issue.c_str(), issue.length());
-	string header = "Content-Length: ";
-	header += std::to_string(fs::file_size("WWW/404.html"));
-	header += "\r\nContent-Type: text/html\r\n\r\n";
-	sendData(client_sock, header.c_str(), header.length());
-	sendFile(client_sock, "WWW/404.html");*/
 }
 
+/*
+ * send file to the client
+ *
+ * @param client_sock the client socket being used to send the message
+ * @param file relative path to the file being sent
+ */
 void sendFile(const int client_sock, string file){
-	cout << "sending file \n";
+	//open file stream to read from file	
 	std::ifstream file_stream(file, std::ios::binary);
 	char data[BUFF_SIZE];
-	//cout << std::to_string(!file_stream.eof());
+	//iterate through file and send each iteration to client
 	while(!file_stream.eof()){
 		file_stream.read(data,BUFF_SIZE);
 		int bytes = file_stream.gcount();
 		sendData(client_sock, data, bytes);
-		//cout << "bytes sent"  + std::to_string(bytes)+ "\n";
 	}
 	file_stream.close();
 	sendData(client_sock, "\r\n", sizeof("\r\n"));
-	cout << "exit \n";
 }
-
+/*
+ *send html header message to client
+ *
+ *@param client_sock the client socket being used to send
+ *@param file relative path to a file that is about to be sent
+ */
 void sendHeader (const int client_sock, string file){
+	//look for file extension
 	std::regex expression("\\.\\w*");
 	std::smatch rMatch;
 	string size;
 	std::stringstream header;
 	
 	header << "Content-Type: ";
-
+	//determine file type
 	if(std::regex_search(file, rMatch, expression)){
 		if (rMatch[0]==".css"){
 			header << "text/css";
@@ -434,39 +433,66 @@ void sendHeader (const int client_sock, string file){
 	}
 	header << "\r\n" << "Content-Length: " << std::to_string(fs::file_size(file)) << "\r\n\r\n";
 	string finalHeader = header.str();
+	//send http response
 	string ok = "HTTP/1.1 200 Looking Good\r\n";
 	sendData(client_sock,  ok.c_str(), ok.length());
+	//send header
 	sendData(client_sock,  finalHeader.c_str(), finalHeader.length());
 }		
-
+/*
+ * wait for a client to connect
+ *
+ * @param &buf a reference to the bounded buffer where client sockets are
+ * stored
+ * @param curDir directory where files are being served from
+ */ 
 void waitForClient(BoundedBuffer &buf, string curDir){
 	while(1){
 		int socks = buf.getItem();
 		handleClient(socks, curDir);
 	}
 }
-
+/*
+ *send the contents of a directory in bulleted list format
+ *
+ * @param client_sock the client socked used for sending
+ * @param curDir the directory that is being printed
+ */
 void sendDir(const int client_sock, string curDir){
+	//create html to start adding files to
 	std::stringstream makeList;
 	makeList << "<html>\r\n<head><title>" << curDir << "</title></head>\r\n<body>\r\n<ul>\r\n";
-	for(auto& fileNames: fs::directory_iterator(curDir)){
-		cout << fileNames;
+	//iterate through all the files in curDir
+	for(auto const& fileNames: fs::directory_iterator(curDir)){
+		//if an index.html file is found serve this instead of the list of
+		//files
 		if(fileNames.path().filename() == "index.html"){
 			sendHeader(client_sock, fileNames.path());
 			sendFile(client_sock, fileNames.path());
 			return;
 		}
+		//if the file is regular add it to the list with a link to open it 
 		else if(fs::is_regular_file(curDir + fileNames.path().filename().string())){
 			makeList << "\t<li><a href=\"" << fileNames.path().filename().string() << "\">" << fileNames.path().filename().string() << "</a></li>\r\n";
 		}
+		//if the file is a directory add it to the list with a link to open it
 		else if (fs::is_directory(curDir + fileNames.path().filename().string())){
 			makeList << "\t<li><a href=\"" << fileNames.path().filename().string() << "/\">" <<  fileNames.path().filename().string() << "/</a></li>\r\n";
 		}
 	}
+	//finish html formatting
 	makeList << "</ul>\r\n</body>\r\n</html>\r\n";
 	string list = makeList.str();
+
+	//attach the content type and length to the top of the html file
 	std::stringstream finalResponse;
 	finalResponse << "Content-Type: text/html\r\nContent-Length: " << list.length() << "\r\n\r\n" << list << "\r\n";
-	string send = finalResponse.str();
+	string send = finalResponse.str();	
+	
+	//send 200 ok http response
+	string ok = "HTTP/1.1 200 Looking Good\r\n";
+	sendData(client_sock,  ok.c_str(), ok.length());
+	
+	//send html file created above
 	sendData(client_sock, send.c_str(),send.length()); 
 }
