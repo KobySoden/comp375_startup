@@ -390,7 +390,7 @@ void sendFile(const int client_sock, string file){
 		file_stream.read(data,BUFF_SIZE);
 		int bytes = file_stream.gcount();
 		sendData(client_sock, data, bytes);
-		cout << "bytes sent"  + std::to_string(bytes)+ "\n";
+		//cout << "bytes sent"  + std::to_string(bytes)+ "\n";
 	}
 	file_stream.close();
 	sendData(client_sock, "\r\n", sizeof("\r\n"));
@@ -451,7 +451,22 @@ void sendDir(const int client_sock, string curDir){
 	makeList << "<html>\r\n<head><title>" << curDir << "</title></head>\r\n<body>\r\n<ul>\r\n";
 	for(auto& fileNames: fs::directory_iterator(curDir)){
 		cout << fileNames;
+		if(fileNames.path().filename() == "index.html"){
+			sendHeader(client_sock, fileNames.path());
+			sendFile(client_sock, fileNames.path());
+			return;
+		}
+		else if(fs::is_regular_file(curDir + fileNames.path().filename().string())){
+			makeList << "\t<li><a href=\"" << fileNames.path().filename().string() << "\">" << fileNames.path().filename().string() << "</a></li>\r\n";
+		}
+		else if (fs::is_directory(curDir + fileNames.path().filename().string())){
+			makeList << "\t<li><a href=\"" << fileNames.path().filename().string() << "/\">" <<  fileNames.path().filename().string() << "/</a></li>\r\n";
+		}
 	}
+	makeList << "</ul>\r\n</body>\r\n</html>\r\n";
 	string list = makeList.str();
-	sendData(client_sock, list.c_str(),list.length()); 
+	std::stringstream finalResponse;
+	finalResponse << "Content-Type: text/html\r\nContent-Length: " << list.length() << "\r\n\r\n" << list << "\r\n";
+	string send = finalResponse.str();
+	sendData(client_sock, send.c_str(),send.length()); 
 }
