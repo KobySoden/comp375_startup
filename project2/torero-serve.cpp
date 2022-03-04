@@ -37,6 +37,8 @@
 #include <regex>
 #include <fstream>
 
+#include "BoundedBuffer.hpp"
+
 // shorten the std::filesystem namespace down to just fs
 namespace fs = std::filesystem;
 
@@ -47,7 +49,8 @@ using std::thread;
 
 // This will limit how many clients can be waiting for a connection.
 static const int BACKLOG = 10;
-
+const size_t MAX_THREADS = 10;
+const size_t BUFF_CAP = 10;
 
 // forward declarations
 int createSocketAndListen(const int port_num);
@@ -275,10 +278,18 @@ int createSocketAndListen(const int port_num) {
  * @param server_sock The socket used by the server.
  */
 void acceptConnections(const int server_sock, std::string curDir) {
-    while (true) {
+	
+	BoundedBuffer buf(BUFF_CAP);
+    
+	for (size_t i = 0; i<MAX_THREADS; i++){
+		std::thread listener(waitForClient,std::ref(buf),curDir);
+		listener.detach();
+	}
+	
+	while (true) {
         // Declare a socket for the client connection.
         int sock;
-
+		
         /* 
 		 * Another address structure.  This time, the system will automatically
          * fill it in, when we accept a connection, to tell us where the
@@ -311,8 +322,8 @@ void acceptConnections(const int server_sock, std::string curDir) {
 		 * You'll implement this shared buffer in one of the labs and can use
 		 * it directly here.
 		 */
-		handleClient(sock, curDir);
-    }
+    	buf.putItem(sock);
+	}
 }
 
 bool isValid(std::string request){
@@ -425,3 +436,10 @@ void sendHeader (const int client_sock, string file){
 	sendData(client_sock,  ok.c_str(), ok.length());
 	sendData(client_sock,  finalHeader.c_str(), finalHeader.length());
 }		
+
+void waitForClient(BounedBuffer &buf, string curDir){
+	while(1){
+		int socks = buf.getItem();
+		handleClient(socks, curDir);
+	}
+}
