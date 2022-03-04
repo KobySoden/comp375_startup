@@ -1,31 +1,39 @@
 COMP 375 - Project 2 (Web Server)
 
-1. Partner 1's FULL Name:
-   Partner 1's USD Email Address:
-   Partner 2's FULL Name:
-   Partner 2's USD Email Address:
+1. Partner 1's FULL Name: Koby Soden
+   Partner 1's USD Email Address: ksoden@sandiego.edu
+   Partner 2's FULL Name: Kevin McDonald
+   Partner 2's USD Email Address: kmcdonald@sandiego.edu
 
 
 2. A typed copy of USD's academic integrity pledge, followed by each partners'
    typed initials (as a way of "signing the pledge.").
 
-   The academic integrity pledge can be found on page 3 of
-   the document found here: https://www.sandiego.edu/conduct/documents/HonorCode.pdf
-   To be clear, it is the text that starts, "I pledge to demonstrate...".
+	I  pledge to demonstrate personal and academic integrity in all matters with my fellow
+	students, the faculty, and the administration here at USD. I promise to be honest and
+	accountable for my actions; and to uphold the statutes of scholastic honesty to better
+	myself and those around me.
+	KS
+	KM
 
 
 3. The estimated number of hours spent working on the project.
-		- Time spent partner 1 spent working alone:
-		- Time spent partner 2 spent working alone:
-		- Time spent working together:
+		- Time spent partner 1 spent working alone: 30 min
+		- Time spent partner 2 spent working alone: 45 min
+		- Time spent working together: 16 hrs
 
 
 4. A list of missing features and/or known bugs. (Put "None if there aren't
    any.)
 
+	None that we are aware of. 
+
 
 5. Did you submit on time? (If not, it will counted as your late submission)
-
+	Yes
 
 6. (Optional) Any feedback you with to give me relating the project (e.g. Was it
    interesting? How could it be improved?)
+
+	Some of the HTML stuff was confusing. I wish there was more guidance on
+	formatting HTML files.
