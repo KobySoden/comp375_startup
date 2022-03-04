@@ -50,7 +50,7 @@ using std::thread;
 // This will limit how many clients can be waiting for a connection.
 static const int BACKLOG = 10;
 const size_t MAX_THREADS = 10;
-const size_t BUFF_CAP = 10;
+const size_t BUFF_CAP = 20;
 
 // forward declarations
 int createSocketAndListen(const int port_num);
@@ -58,12 +58,15 @@ void acceptConnections(const int server_sock, std::string curDir);
 void handleClient(const int client_sock, std::string curDir);
 void sendData(int socked_fd, const char *data, size_t data_length);
 int receiveData(int socked_fd, char *dest, size_t buff_size);
+
 bool isValid(std::string request);
 bool fileDNE(std::string file);
 void pageDNE(const int client_sock);
 void sendBadReq(const int client_sock);
 void sendFile(const int client_sock, std::string file);
 void sendHeader (const int client_sock, std::string file);
+void sendDir(const int client_sock, string curDir);
+void waitForClient(BoundedBuffer &buf, string curDir);
 
 
 #define BUFF_SIZE 4096
@@ -146,8 +149,8 @@ int receiveData(int socked_fd, char *dest, size_t buff_size) {
  */
 void handleClient(const int client_sock, std::string curDir) {
 	// Step 1: Receive the request message from the client
-	char received_data[2048];
-	int bytes_received = receiveData(client_sock, received_data, 2048);
+	char received_data[BUFF_SIZE];
+	int bytes_received = receiveData(client_sock, received_data, BUFF_SIZE);
 
 	// Turn the char array into a C++ string for easier processing.
 	string request_string(received_data, bytes_received);
@@ -173,16 +176,16 @@ void handleClient(const int client_sock, std::string curDir) {
 	//append filename to directory
 	curDir.append(file);
 	
-	if(fileDNE(curDir)){
+	if(fs::is_directory(curDir)) {
+		sendDir(client_sock,curDir);
+	}
+	
+	else if(fileDNE(curDir)){
 		pageDNE(client_sock);
 		return;
 	}
 	sendHeader(client_sock, curDir);
 	sendFile(client_sock,curDir);	
-
-	// TODO
-	// Step 3: Generate HTTP response message based on the request you received.
-	
 	// TODO
 	// Step 4: Send response to client using the sendData function.
 	// FIXME: The following line just sends back the request message, which is
@@ -410,21 +413,20 @@ void sendHeader (const int client_sock, string file){
 			header << "text/html";
 		}
 		else if (rMatch[0] == ".pdf"){
-			header << "text/pdf";
+			header << "application/pdf";
 		}
 		else if (rMatch[0] == ".jpg"){
-			header << "text/jpg";
+			header << "image/jpg";
 		}
 		else if (rMatch[0] == ".png"){
-			header << "text/png";
+			header << "image/png";
 		}
 		else if (rMatch[0] == ".gif"){
-			header << "text/gif";
+			header << "image/gif";
 		}
 		else if(rMatch[0] == ".plain"){
 			header << "text/plain";
 		}
-		else cout << "WE MADE IT\n";
 	}
 	else{
 		cout << "file type " << rMatch[0].str() <<" is not supported";
@@ -437,9 +439,19 @@ void sendHeader (const int client_sock, string file){
 	sendData(client_sock,  finalHeader.c_str(), finalHeader.length());
 }		
 
-void waitForClient(BounedBuffer &buf, string curDir){
+void waitForClient(BoundedBuffer &buf, string curDir){
 	while(1){
 		int socks = buf.getItem();
 		handleClient(socks, curDir);
 	}
+}
+
+void sendDir(const int client_sock, string curDir){
+	std::stringstream makeList;
+	makeList << "<html>\r\n<head><title>" << curDir << "</title></head>\r\n<body>\r\n<ul>\r\n";
+	for(auto& fileNames: fs::directory_iterator(curDir)){
+		cout << fileNames;
+	}
+	string list = makeList.str();
+	sendData(client_sock, list.c_str(),list.length()); 
 }
