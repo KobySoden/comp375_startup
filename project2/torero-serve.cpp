@@ -37,6 +37,8 @@
 #include <regex>
 #include <fstream>
 
+#include "BoundedBuffer.hpp"
+
 // shorten the std::filesystem namespace down to just fs
 namespace fs = std::filesystem;
 
@@ -47,7 +49,8 @@ using std::thread;
 
 // This will limit how many clients can be waiting for a connection.
 static const int BACKLOG = 10;
-
+const size_t MAX_THREADS = 10;
+const size_t BUFF_CAP = 20;
 
 // forward declarations
 int createSocketAndListen(const int port_num);
@@ -55,11 +58,15 @@ void acceptConnections(const int server_sock, std::string curDir);
 void handleClient(const int client_sock, std::string curDir);
 void sendData(int socked_fd, const char *data, size_t data_length);
 int receiveData(int socked_fd, char *dest, size_t buff_size);
+
 bool isValid(std::string request);
 bool fileDNE(std::string file);
 void pageDNE(const int client_sock);
 void sendBadReq(const int client_sock);
 void sendFile(const int client_sock, std::string file);
+void sendHeader (const int client_sock, std::string file);
+void sendDir(const int client_sock, string curDir);
+void waitForClient(BoundedBuffer &buf, string curDir);
 
 
 #define BUFF_SIZE 4096
@@ -142,8 +149,8 @@ int receiveData(int socked_fd, char *dest, size_t buff_size) {
  */
 void handleClient(const int client_sock, std::string curDir) {
 	// Step 1: Receive the request message from the client
-	char received_data[2048];
-	int bytes_received = receiveData(client_sock, received_data, 2048);
+	char received_data[BUFF_SIZE];
+	int bytes_received = receiveData(client_sock, received_data, BUFF_SIZE);
 
 	// Turn the char array into a C++ string for easier processing.
 	string request_string(received_data, bytes_received);
@@ -169,15 +176,16 @@ void handleClient(const int client_sock, std::string curDir) {
 	//append filename to directory
 	curDir.append(file);
 	
-	if(fileDNE(curDir)){
+	if(fs::is_directory(curDir)) {
+		sendDir(client_sock,curDir);
+	}
+	
+	else if(fileDNE(curDir)){
 		pageDNE(client_sock);
 		return;
 	}
-	
-
-	// TODO
-	// Step 3: Generate HTTP response message based on the request you received.
-	
+	sendHeader(client_sock, curDir);
+	sendFile(client_sock,curDir);	
 	// TODO
 	// Step 4: Send response to client using the sendData function.
 	// FIXME: The following line just sends back the request message, which is
@@ -273,10 +281,18 @@ int createSocketAndListen(const int port_num) {
  * @param server_sock The socket used by the server.
  */
 void acceptConnections(const int server_sock, std::string curDir) {
-    while (true) {
+	
+	BoundedBuffer buf(BUFF_CAP);
+    
+	for (size_t i = 0; i<MAX_THREADS; i++){
+		std::thread listener(waitForClient,std::ref(buf),curDir);
+		listener.detach();
+	}
+	
+	while (true) {
         // Declare a socket for the client connection.
         int sock;
-
+		
         /* 
 		 * Another address structure.  This time, the system will automatically
          * fill it in, when we accept a connection, to tell us where the
@@ -309,8 +325,8 @@ void acceptConnections(const int server_sock, std::string curDir) {
 		 * You'll implement this shared buffer in one of the labs and can use
 		 * it directly here.
 		 */
-		handleClient(sock, curDir);
-    }
+    	buf.putItem(sock);
+	}
 }
 
 bool isValid(std::string request){
@@ -333,24 +349,39 @@ bool fileDNE(std::string file){
 void sendBadReq(const int client_sock){
 	string badReq = "HTTP/1.1 400 BAD REQUEST\r\n";
 	sendData(client_sock, badReq.c_str(), badReq.length());
-	string header = "Content-Length: ";
+	string error;
+	error = "<html>\r\n<head>\r\n<title>INVALID REQUEST</title>\r\n</head>\r\n<body>400 BAD REQUEST :'(</body>\r\n</html>\r\n";  
+	std::stringstream ack;
+	ack << "Content-Type: text/html\r\nContent-Lenth: " <<  error.length() << "\r\n\r\n" << error <<  "\r\n"; 
+	string fullAck = ack.str();
+	sendData(client_sock, fullAck.c_str(), fullAck.length());
+	/*string header = "Content-Length: ";
 	header += std::to_string(fs::file_size("WWW/400.html"));
 	header += "\r\nContent-Type: text/html\r\n\r\n";
 	sendData(client_sock, header.c_str(), header.length());
-	sendFile(client_sock, "WWW/400.html");	
+	sendFile(client_sock, "WWW/400.html");*/	
 }
 
 void pageDNE (const int client_sock){
 	string issue = "HTTP/1.1 404 PAGE NOT FOUND";
 	sendData(client_sock, issue.c_str(), issue.length());
+	string error;
+	error = "<html>\r\n<head>\r\n<title> PAGE NOT FOUND </title>\r\n</head>\r\n<body>404 Page Not Found :'(</body>\r\n</html>\r\n";  
+	std::stringstream ack;
+	ack << "Content-Type: text/html\r\nContent-Lenth: " <<  error.length() << "\r\n\r\n" << error <<  "\r\n"; 
+	string fullAck = ack.str();
+	sendData(client_sock, fullAck.c_str(), fullAck.length());
+
+	/*string issue = "HTTP/1.1 404 PAGE NOT FOUND";
+	sendData(client_sock, issue.c_str(), issue.length());
 	string header = "Content-Length: ";
 	header += std::to_string(fs::file_size("WWW/404.html"));
 	header += "\r\nContent-Type: text/html\r\n\r\n";
 	sendData(client_sock, header.c_str(), header.length());
-	sendFile(client_sock, "WWW/404.html");
+	sendFile(client_sock, "WWW/404.html");*/
 }
 
-void sendFile(const int client_sock, std::string file){
+void sendFile(const int client_sock, string file){
 	cout << "sending file \n";
 	std::ifstream file_stream(file, std::ios::binary);
 	char data[BUFF_SIZE];
@@ -364,4 +395,63 @@ void sendFile(const int client_sock, std::string file){
 	file_stream.close();
 	sendData(client_sock, "\r\n", sizeof("\r\n"));
 	cout << "exit \n";
+}
+
+void sendHeader (const int client_sock, string file){
+	std::regex expression("\\.\\w*");
+	std::smatch rMatch;
+	string size;
+	std::stringstream header;
+	
+	header << "Content-Type: ";
+
+	if(std::regex_search(file, rMatch, expression)){
+		if (rMatch[0]==".css"){
+			header << "text/css";
+		}
+		else if (rMatch[0] == ".html"){
+			header << "text/html";
+		}
+		else if (rMatch[0] == ".pdf"){
+			header << "application/pdf";
+		}
+		else if (rMatch[0] == ".jpg"){
+			header << "image/jpg";
+		}
+		else if (rMatch[0] == ".png"){
+			header << "image/png";
+		}
+		else if (rMatch[0] == ".gif"){
+			header << "image/gif";
+		}
+		else if(rMatch[0] == ".plain"){
+			header << "text/plain";
+		}
+	}
+	else{
+		cout << "file type " << rMatch[0].str() <<" is not supported";
+		return;
+	}
+	header << "\r\n" << "Content-Length: " << std::to_string(fs::file_size(file)) << "\r\n\r\n";
+	string finalHeader = header.str();
+	string ok = "HTTP/1.1 200 Looking Good\r\n";
+	sendData(client_sock,  ok.c_str(), ok.length());
+	sendData(client_sock,  finalHeader.c_str(), finalHeader.length());
 }		
+
+void waitForClient(BoundedBuffer &buf, string curDir){
+	while(1){
+		int socks = buf.getItem();
+		handleClient(socks, curDir);
+	}
+}
+
+void sendDir(const int client_sock, string curDir){
+	std::stringstream makeList;
+	makeList << "<html>\r\n<head><title>" << curDir << "</title></head>\r\n<body>\r\n<ul>\r\n";
+	for(auto& fileNames: fs::directory_iterator(curDir)){
+		cout << fileNames;
+	}
+	string list = makeList.str();
+	sendData(client_sock, list.c_str(),list.length()); 
+}
