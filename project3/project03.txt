@@ -1,9 +1,9 @@
 COMP 375 - Project 3
 
-1. Partner 1's FULL Name:
-   Partner 1's USD Email Address:
-   Partner 2's FULL Name:
-   Partner 2's USD Email Address:
+1. Partner 1's FULL Name: Koby Soden
+   Partner 1's USD Email Address: ksoden@sandiego.edu
+   Partner 2's FULL Name: Andres Mallea
+   Partner 2's USD Email Address: amallea@sandiego.edu
 
 
 2. A typed copy of USD's academic integrity pledge, followed by each partners'
@@ -25,7 +25,6 @@ COMP 375 - Project 3
 
 
 5. Did you submit on time? (If not, you will be charged one comp375 buck.)
-
 
 6. (Optional) Any feedback you with to give me relating the project (e.g. Was it
    interesting? How could it be improved?)
