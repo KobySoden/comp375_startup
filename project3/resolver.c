@@ -145,12 +145,28 @@ char* resolve(char *hostname, bool is_mx) {
 			perror("recv");
 		}
 	}
+	for(int i = 0; i<MAX_RESPONSE_SIZE;i++){
+		printf("%2x ", response[i]);
+		if (i%16 == 0) printf("\n");
+	}
 
 	// TODO: The server's response will be located in the response array for you
 	// to further process and extract the needed information.
 	// Remember that DNS is a binary protocol: if you try printing out response
 	// as a string, it won't work correctly.
-
+	
+	uint16_t flags = (response[2]<<8)+response[3];
+	uint16_t questions = (response[4]<<8)+response[5];
+	uint16_t answerRR = (response[6]<<8)+response[7];
+	uint16_t authorityRR = (response[8]<<8)+response[9];
+	uint16_t additionalRR = (response[10]<<8)+response[11];
+	
+	printf("\nflags: %x\n", flags);
+	printf("\nquestions: %x\n", questions);
+	printf("\nanswer rr's: %x\n", answerRR);
+	printf("\nauthority rr's: %x\n", authorityRR);
+	printf("\nadditional rr's: %x\n", additionalRR);
+	
 	return NULL;
 }
 
@@ -186,7 +202,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	char *answer = resolve(url, isMX);
+	char *answer = resolve("www.sandiego.edu", isMX);
 	
 	if (answer != NULL) {
 		printf("Answer: %s\n", answer);
