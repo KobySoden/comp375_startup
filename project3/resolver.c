@@ -156,13 +156,38 @@ char* resolve(char *hostname, bool is_mx) {
 
 
 int main(int argc, char **argv) {
-	if (argc < 2) {
+	bool isMX;
+	char *url;
+	
+	//one CLI input
+	if(argc == 2){
+		isMX = false;
+		url = argv[1];
+		printf("request for: %s\n", url);
+	}
+	//two CLI inputs
+	else if (argc == 3) {
+		if (strcmp(argv[1], "-m") == 0) {
+			isMX = true;
+			url = argv[2];
+			//TODO need to chop off www from the url here
+			printf("mail server request for: %s\n", url);
+		}
+		//bad flag
+		else { 
+			printf("Invalid program usage\n");
+			return 1;
+		}
+	}
+	//wrong number of inputs. print out usage here
+	else {
 		// TODO: provide a more helpful message on how to use the program
 		printf("Invalid program usage for %s!\n", argv[0]);
+		return 1;
 	}
 
-	char *answer = resolve("www.sandiego.edu", false);
-
+	char *answer = resolve(url, isMX);
+	
 	if (answer != NULL) {
 		printf("Answer: %s\n", answer);
 	}
