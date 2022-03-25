@@ -146,8 +146,8 @@ char* resolve(char *hostname, bool is_mx) {
 		}
 	}
 	for(int i = 0; i<MAX_RESPONSE_SIZE;i++){
-		printf("%2x ", response[i]);
-		if (i%16 == 0) printf("\n");
+		printf("%02x ", response[i]);
+		if (i%32 == 0) printf("\n");
 	}
 
 	// TODO: The server's response will be located in the response array for you
@@ -162,11 +162,31 @@ char* resolve(char *hostname, bool is_mx) {
 	uint16_t additionalRR = (response[10]<<8)+response[11];
 	
 	printf("\nflags: %x\n", flags);
-	printf("\nquestions: %x\n", questions);
-	printf("\nanswer rr's: %x\n", answerRR);
-	printf("\nauthority rr's: %x\n", authorityRR);
-	printf("\nadditional rr's: %x\n", additionalRR);
+	printf("questions: %x\n", questions);
+	printf("answer rr's: %x\n", answerRR);
+	printf("authority rr's: %x\n", authorityRR);
+	printf("additional rr's: %x\n", additionalRR);
 	
+	//we need to look at the number of questions, answerrr's authorityrr's
+	//additionalrr's and move through the rest of the response buffer
+	//accordingly
+	int respPointer = 12;
+	uint16_t qtype;
+	uint16_t qclass;
+
+	while (questions > 0) {
+		qtype =	(response[respPointer+15]<<8) + response[respPointer+16] ;
+		qclass = (response[respPointer+17] << 8) + response[respPointer+18];
+		printf("query type: %x\n", qtype);
+		printf("query class: %x\n", qclass);
+
+		questions--;
+	}
+
+	//queries start at response[12] 
+	//there could be multiple queries so we have to handle this
+	//
+	//
 	return NULL;
 }
 
