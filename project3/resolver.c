@@ -15,6 +15,25 @@
 #define MAX_QUERY_SIZE 1024
 #define MAX_RESPONSE_SIZE 4096
 
+//store header in struct
+DNSHeader getHeader(uint8_t *response){
+	DNSHeader head;
+	head.id = (response[0] << 8) + response[1];
+	head.flags = (response[2]<<8)+response[3];
+	head.q_count = (response[4]<<8)+response[5];
+	head.a_count = (response[6]<<8)+response[7];
+	head.auth_count = (response[8]<<8)+response[9];	
+	head.other_count = (response[10]<<8)+response[11];
+	return head;
+}
+
+//get root server list from file
+char ** getRootServers(char * file);
+
+//unsure of return value needs to recursively call resolve until we get the
+//right response
+bool recurseResolve(char * hostname, uint8_t qType, char ** rootList, int timeout);
+
 // Note: uint8_t* is a pointer to 8 bits of data.
 
 /**
@@ -24,7 +43,7 @@
  * @param hostname The host we are trying to resolve
  * @return The number of bytes in the constructed query.
  */
-int construct_query(uint8_t* query, char* hostname) {
+int construct_query(uint8_t* query, char* hostname, bool isMX) {
 	memset(query, 0, MAX_QUERY_SIZE);
 
 	// first part of the query is a fixed size header
@@ -50,16 +69,18 @@ int construct_query(uint8_t* query, char* hostname) {
 	int name_len = convertStringToDNS(hostname,query+query_len);
 	query_len += name_len; 
 	
-	// set the query type to A (i.e. 1)
+	// set the query type to A or mx
 	uint16_t *type = (uint16_t*)(query+query_len);
-	*type = htons(1);
+	if(isMX)	*type = htons(15);
+	else 		*type = htons(1);
 	query_len+=2;
 
 	// finally the class: INET
 	uint16_t *class = (uint16_t*)(query+query_len);
 	*class = htons(1);
 	query_len += 2;
- 
+	
+	printf("query length: %d\n", query_len); 
 	return query_len;
 }
 
@@ -119,7 +140,7 @@ char* resolve(char *hostname, bool is_mx) {
 	// You should use that type for all buffers used for sending to and
 	// receiving from the DNS server.
 	uint8_t query[MAX_QUERY_SIZE]; 
-	int query_len=construct_query(query, hostname);
+	int query_len=construct_query(query, hostname, is_mx);
 
 	int send_count = sendto(sock, query, query_len, 0,
 							(struct sockaddr*)&addr, sizeof(addr));
@@ -145,6 +166,8 @@ char* resolve(char *hostname, bool is_mx) {
 			perror("recv");
 		}
 	}
+
+	//print out hex response
 	for(int i = 0; i<MAX_RESPONSE_SIZE;i++){
 		printf("%02x ", response[i]);
 		if (i%32 == 0) printf("\n");
@@ -155,38 +178,42 @@ char* resolve(char *hostname, bool is_mx) {
 	// Remember that DNS is a binary protocol: if you try printing out response
 	// as a string, it won't work correctly.
 	
-	uint16_t flags = (response[2]<<8)+response[3];
-	uint16_t questions = (response[4]<<8)+response[5];
-	uint16_t answerRR = (response[6]<<8)+response[7];
-	uint16_t authorityRR = (response[8]<<8)+response[9];
-	uint16_t additionalRR = (response[10]<<8)+response[11];
+	DNSHeader head = getHeader(response); 
 	
-	printf("\nflags: %x\n", flags);
-	printf("questions: %x\n", questions);
-	printf("answer rr's: %x\n", answerRR);
-	printf("authority rr's: %x\n", authorityRR);
-	printf("additional rr's: %x\n", additionalRR);
+	printf("\nflags: %x\n", head.flags);
+	printf("questions: %x\n", head.q_count);
+	printf("answer rr's: %x\n", head.a_count);
+	printf("authority rr's: %x\n", head.auth_count);
+	printf("additional rr's: %x\n", head.other_count);
+	
+	//might be more than one answer
+	if (head.a_count == 1){
+		printf("ip: %d.%d.%d.%d",response[query_len + 12],response[query_len+13],response[query_len+14],response[query_len+15]);
+	}
+	
 	
 	//we need to look at the number of questions, answerrr's authorityrr's
 	//additionalrr's and move through the rest of the response buffer
 	//accordingly
-	int respPointer = 12;
-	uint16_t qtype;
-	uint16_t qclass;
+	//uint8_t * dnsName;
+	//memset(dnsName, 0, 16);
+	
+	//int respPointer = 12 + convertStringToDNS(hostname, dnsName);
+	//printf("respointer: %d", respPointer);
+	//uint16_t qtype;
+	//uint16_t qclass;
 
-	while (questions > 0) {
-		qtype =	(response[respPointer+15]<<8) + response[respPointer+16] ;
-		qclass = (response[respPointer+17] << 8) + response[respPointer+18];
-		printf("query type: %x\n", qtype);
-		printf("query class: %x\n", qclass);
+	//while (questions > 0) {
+	//	qtype =	(response[respPointer+1]<<8) + response[respPointer+2] ;
+	//	qclass = (response[respPointer+3] << 8) + response[respPointer+4];
+	//	printf("query type: %x\n", qtype);
+	//	printf("query class: %x\n", qclass);
 
-		questions--;
-	}
+	//	questions--;
+	//}
 
 	//queries start at response[12] 
 	//there could be multiple queries so we have to handle this
-	//
-	//
 	return NULL;
 }
 
@@ -199,7 +226,6 @@ int main(int argc, char **argv) {
 	if(argc == 2){
 		isMX = false;
 		url = argv[1];
-		printf("request for: %s\n", url);
 	}
 	//two CLI inputs
 	else if (argc == 3) {
@@ -207,7 +233,6 @@ int main(int argc, char **argv) {
 			isMX = true;
 			url = argv[2];
 			//TODO need to chop off www from the url here
-			printf("mail server request for: %s\n", url);
 		}
 		//bad flag
 		else { 
@@ -222,7 +247,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	char *answer = resolve("www.sandiego.edu", isMX);
+	char *answer = resolve(url, isMX);
 	
 	if (answer != NULL) {
 		printf("Answer: %s\n", answer);
