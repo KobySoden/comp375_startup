@@ -14,6 +14,8 @@
 
 #define MAX_QUERY_SIZE 1024
 #define MAX_RESPONSE_SIZE 4096
+#define DNS_HEADER_SIZE 12
+#define DEBUG true
 
 //store header in struct
 DNSHeader getHeader(uint8_t *response){
@@ -24,7 +26,49 @@ DNSHeader getHeader(uint8_t *response){
 	head.a_count = (response[6]<<8)+response[7];
 	head.auth_count = (response[8]<<8)+response[9];	
 	head.other_count = (response[10]<<8)+response[11];
+	
+	if(DEBUG){		
+		printf("flags: %x\n", head.flags);
+		printf("questions: %x\n", head.q_count);
+		printf("answer rr's: %x\n", head.a_count);
+		printf("authority rr's: %x\n", head.auth_count);
+		printf("additional rr's: %x\n", head.other_count);
+	}
+	
 	return head;
+}
+
+DNSRecord getRecord(uint8_t *response){
+	DNSRecord record;
+		
+	record.name = (response[0]<<8) + response[1];
+	record.type = (response[2]<<8) + response[3];
+	record.class = (response[4]<<8) + response[5];
+	record.ttl = (response[6]<<24) + (response[7]<<16) + (response[8]<<8) + response[9];
+	record.datalen = (response[10]<<8) + response[11];
+
+	//need to figure out how to store data section
+	record.data = NULL;
+	if(DEBUG){
+		printf("record name: %04x ",record.name);	
+		printf("record type: %04x ",record.type);
+		printf("record class: %04x ",record.class);
+		printf("record ttl: %08x ",record.ttl);
+		printf("record datalen: %04x\n", record.datalen);
+	}
+	return record;
+}
+
+int getNameLength(uint8_t *name){
+	int pointer=0;
+	int length=0;
+		
+	while(name[pointer] != 0){
+		length += name[pointer] + 1;
+		pointer = length;
+	}
+	//account for last label 
+	return length+1;
 }
 
 //get root server list from file
@@ -129,8 +173,9 @@ char* resolve(char *hostname, bool is_mx) {
 	// The following is the IP address of USD's local DNS server. It is a
 	// placeholder only (i.e. you shouldn't have this hardcoded into your final
 	// program).
-	in_addr_t nameserver_addr = inet_addr("172.16.7.15");
+	//in_addr_t nameserver_addr = inet_addr("172.16.7.15");
 	
+	in_addr_t nameserver_addr = inet_addr("198.41.0.4");
 	struct sockaddr_in addr; 	// internet socket address data structure
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(53); // port 53 for DNS
@@ -167,53 +212,38 @@ char* resolve(char *hostname, bool is_mx) {
 		}
 	}
 
-	//print out hex response
-	for(int i = 0; i<MAX_RESPONSE_SIZE;i++){
-		printf("%02x ", response[i]);
-		if (i%32 == 0) printf("\n");
-	}
-
 	// TODO: The server's response will be located in the response array for you
 	// to further process and extract the needed information.
 	// Remember that DNS is a binary protocol: if you try printing out response
 	// as a string, it won't work correctly.
 	
+	//read the header into a struct
 	DNSHeader head = getHeader(response); 
 	
-	printf("\nflags: %x\n", head.flags);
-	printf("questions: %x\n", head.q_count);
-	printf("answer rr's: %x\n", head.a_count);
-	printf("authority rr's: %x\n", head.auth_count);
-	printf("additional rr's: %x\n", head.other_count);
+	//12 = size of header
+	int nameLen = getNameLength(response+DNS_HEADER_SIZE);
+	//+4 for type and class this is where the first record is located in the
+	//response
+	int	recordIndex = DNS_HEADER_SIZE + nameLen + 4;		
 	
+	//make array of auth servers
+	DNSRecord AuthRecords[head.auth_count];
+	for(int i = 0; i < head.auth_count; i++){
+		if(DEBUG) printf("Record #: %d ", i);
+		AuthRecords[i] = getRecord(response+recordIndex);
+		recordIndex += 12 + AuthRecords[i].datalen;
+		if(DEBUG) printf("index: %d\n ", recordIndex);	
+	}
+	
+	
+	
+	
+			
 	//might be more than one answer
 	if (head.a_count == 1){
 		printf("ip: %d.%d.%d.%d",response[query_len + 12],response[query_len+13],response[query_len+14],response[query_len+15]);
 	}
 	
-	
-	//we need to look at the number of questions, answerrr's authorityrr's
-	//additionalrr's and move through the rest of the response buffer
-	//accordingly
-	//uint8_t * dnsName;
-	//memset(dnsName, 0, 16);
-	
-	//int respPointer = 12 + convertStringToDNS(hostname, dnsName);
-	//printf("respointer: %d", respPointer);
-	//uint16_t qtype;
-	//uint16_t qclass;
-
-	//while (questions > 0) {
-	//	qtype =	(response[respPointer+1]<<8) + response[respPointer+2] ;
-	//	qclass = (response[respPointer+3] << 8) + response[respPointer+4];
-	//	printf("query type: %x\n", qtype);
-	//	printf("query class: %x\n", qclass);
-
-	//	questions--;
-	//}
-
-	//queries start at response[12] 
-	//there could be multiple queries so we have to handle this
 	return NULL;
 }
 
