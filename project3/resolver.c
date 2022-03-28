@@ -50,7 +50,11 @@ DNSRecord getRecord(uint8_t *response){
 	//TODO populate record.data using datalen the data startss at response[12]
 	//and goes until response[12+datalen]
 	//need to figure out how to store data section
-	record.data = NULL;
+	//
+	//not sure if this will store it properly because of the periods in the
+	//address
+	record.data = (response[12]<<24) + (response[13]<<16) + (response[14]<<8) + response[15];
+
 	if(DEBUG){
 		printf("record name: %04x ",record.name);	
 		printf("record type: %04x ",record.type);
@@ -76,9 +80,27 @@ int getNameLength(uint8_t *name){
 //get root server list from file
 char ** getRootServers(char * file);
 
+char* resolve(char * Hostname, bool is_MX = false)
+
 //unsure of return value needs to recursively call resolve until we get the
 //right response
-bool recurseResolve(char * hostname, uint8_t qType, char ** rootList, int timeout);
+/**
+ * Recursive call for resolve() that iteratively traverses the hierarchy of
+ * servers (Root, TLD, Authoritative) until obtaining a list of answer
+ * responses, which it returns.
+ *
+ * @param hostname The host we are trying to resolve
+ * @param qType An integer representing the type of query
+ * @param rootList Pointer to a character pointer list of servers to query
+ * @param timeout An integer that is set when the socket timeouts
+ * @return A buffer of answer records or nothing if the query could not be
+ * resolved.
+ */
+bool recurseResolve(char * hostname, uint8_t qType, char ** rootList, int timeout)
+{
+
+}
+
 
 // Note: uint8_t* is a pointer to 8 bits of data.
 
