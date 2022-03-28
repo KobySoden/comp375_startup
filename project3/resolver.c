@@ -47,6 +47,8 @@ DNSRecord getRecord(uint8_t *response){
 	record.ttl = (response[6]<<24) + (response[7]<<16) + (response[8]<<8) + response[9];
 	record.datalen = (response[10]<<8) + response[11];
 
+	//TODO populate record.data using datalen the data startss at response[12]
+	//and goes until response[12+datalen]
 	//need to figure out how to store data section
 	record.data = NULL;
 	if(DEBUG){
@@ -173,9 +175,10 @@ char* resolve(char *hostname, bool is_mx) {
 	// The following is the IP address of USD's local DNS server. It is a
 	// placeholder only (i.e. you shouldn't have this hardcoded into your final
 	// program).
-	//in_addr_t nameserver_addr = inet_addr("172.16.7.15");
+	in_addr_t nameserver_addr = inet_addr("172.16.7.15");
 	
-	in_addr_t nameserver_addr = inet_addr("198.41.0.4");
+	//in_addr_t nameserver_addr = inet_addr("198.41.0.4");
+	
 	struct sockaddr_in addr; 	// internet socket address data structure
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(53); // port 53 for DNS
@@ -226,6 +229,21 @@ char* resolve(char *hostname, bool is_mx) {
 	//response
 	int	recordIndex = DNS_HEADER_SIZE + nameLen + 4;		
 	
+	DNSRecord Answers[head.a_count];
+	for(int i = 0; i < head.a_count; i++){
+		if(DEBUG) printf("Record #: %d ", i);
+		Answers[i] = getRecord(response+recordIndex);
+		recordIndex += 12 + Answers[i].datalen;
+		if(DEBUG) printf("index: %d\n ", recordIndex);	
+	
+		// I think this is where we handle type: A = ipv4 AAAA = ipv6 MX= mail
+		// server CNAME = canonical name 
+		//if (Answers[i].type == 1)
+			//this gives a seg fault rn because we arent adding data to the
+			//records yet in the getrecord function
+			//printf("Found an ipv4 address!\n Here it is: %d.%d.%d.%d\n", Answers[i].data[0], Answers[i].data[1], Answers[i].data[2], Answers[i].data[3]);
+	}		
+	
 	//make array of auth servers
 	DNSRecord AuthRecords[head.auth_count];
 	for(int i = 0; i < head.auth_count; i++){
@@ -235,15 +253,18 @@ char* resolve(char *hostname, bool is_mx) {
 		if(DEBUG) printf("index: %d\n ", recordIndex);	
 	}
 	
-	
-	
-	
-			
-	//might be more than one answer
-	if (head.a_count == 1){
-		printf("ip: %d.%d.%d.%d",response[query_len + 12],response[query_len+13],response[query_len+14],response[query_len+15]);
+	//make array of additional records not sure if we need this but its easy
+	//to add 
+	DNSRecord AddRecords[head.other_count];	
+	for(int i = 0; i < head.other_count; i++){
+		if(DEBUG) printf("Record #: %d ", i);
+		AddRecords[i] = getRecord(response+recordIndex);
+		recordIndex += 12 + AddRecords[i].datalen;
+		if(DEBUG) printf("index: %d\n ", recordIndex);	
 	}
 	
+	//we need to call this same function the the ip addresses of the auth
+	//responses 
 	return NULL;
 }
 

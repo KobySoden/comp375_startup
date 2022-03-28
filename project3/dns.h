@@ -30,11 +30,13 @@ typedef struct DNSHeader DNSHeader;
  */
 struct DNSRecord {
 	// first a variable sized name, then
+	uint16_t name;
 	uint16_t type;
 	uint16_t class;
 	uint32_t ttl;
 	uint16_t datalen;
 	// and then a variable sized data field
+	uint8_t *data;
 } __attribute__((packed));
 
 typedef struct DNSRecord DNSRecord;
