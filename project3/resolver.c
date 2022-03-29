@@ -78,9 +78,49 @@ int getNameLength(uint8_t *name){
 }
 
 //get root server list from file
+//this is generally how I think we can read from the root-servers.txt and put
+//all the addresses in a list. I don't think the way I return in this function
+//is right yet though, and same with the type of function it is
 char ** getRootServers(char * file);
+{
+	FILE *root_file;
+	char root_list[];
 
-char* resolve(char * Hostname, bool is_MX = false)
+	root_file = fopen("root-servers.txt", "r");
+
+	for (int i = 0; i < len(root_file); i++)
+	{
+		fscanf(root_file, "%s", root_list[i]);  
+	}
+
+	fclose(root_file);
+
+	return root_list[]; 
+}
+
+
+
+
+
+/**
+ * Function that returns a string with the IP address for a record of type A
+ * or the name of a mail server associated with the given hostname.
+ *
+ * @param hostname The host we are trying to resolve
+ * @param is_MX
+ * @return A string representation of an IP address or mail server. If the
+ * request could not be resolved then None is returned
+ */
+char * resolve(char * hostname, bool is_MX)
+{
+	printf("Hostname: %s", hostname); 
+
+	int query_type = 1;
+
+	int query = constructQuery(ID, hostname, query_type);
+
+
+}
 
 //unsure of return value needs to recursively call resolve until we get the
 //right response
@@ -96,7 +136,7 @@ char* resolve(char * Hostname, bool is_MX = false)
  * @return A buffer of answer records or nothing if the query could not be
  * resolved.
  */
-bool recurseResolve(char * hostname, uint8_t qType, char ** rootList, int timeout)
+bool recurseResolve(int ID, char * hostname, uint8_t qType, char ** rootList, int timeout)
 {
 
 }
