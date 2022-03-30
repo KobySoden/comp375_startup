@@ -116,25 +116,6 @@ char ** getRootServers(char * file)
 	return root_list; 
 }
 
-/**
- * Function that returns a string with the IP address for a record of type A
- * or the name of a mail server associated with the given hostname.
- *
- * @param hostname The host we are trying to resolve
- * @param is_MX
- * @return A string representation of an IP address or mail server. If the
- * request could not be resolved then None is returned
- */
-//char * resolve(char * hostname, bool is_MX)
-//{
-	//printf("Hostname: %s", hostname); 
-
-	//int query_type = 1;
-
-	//int query = constructQuery(ID, hostname, query_type);
-
-
-//}
 
 //unsure of return value needs to recursively call resolve until we get the
 //right response
@@ -347,6 +328,53 @@ char* resolve(char *hostname, bool is_mx) {
 	//responses 
 	return NULL;
 }
+
+
+//unsure of return value needs to recursively call resolve until we get the
+//right response
+/**
+ * Recursive call for resolve() that iteratively traverses the hierarchy of
+ * servers (Root, TLD, Authoritative) until obtaining a list of answer
+ * responses, which it returns.
+ *
+ * @param hostname The host we are trying to resolve
+ * @param qType An integer representing the type of query
+ * @param rootList Pointer to a character pointer list of servers to query
+ * @param timeout An integer that is set when the socket timeouts
+ * @return A buffer of answer records or nothing if the query could not be
+ * resolved.
+ */
+//bool recurseResolve(int ID, char * hostname, uint8_t qType, char ** rootList, int timeout)
+//{
+//	for (int i = 0; i < len(root_list[]); i++)
+//	{
+//		
+//	int query_len=construct_query(query, hostname, is_mx);
+//
+//
+//	// create a UDP (i.e. Datagram) socket
+//	int sock = socket(AF_INET, SOCK_DGRAM, 0);
+//	if (sock < 0) {
+//		perror("socket");
+//		exit(0);
+//	}
+//	// Create a time value structure and set it to five seconds.
+//	struct timeval tv;
+//	memset(&tv, 0, sizeof(struct timeval));
+//	tv.tv_sec = 5;
+//
+//	/* Tell the OS to use that time value as a time out for operations on
+//	 * our socket. */
+//	int res = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv,
+//			sizeof(struct timeval));
+//
+//	if (res < 0) {
+//		perror("setsockopt");
+//		exit(0);
+//	}
+//
+//	}
+//}
 
 
 int main(int argc, char **argv) {
