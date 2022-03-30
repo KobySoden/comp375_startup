@@ -86,21 +86,34 @@ int getNameLength(uint8_t *name){
 //this is generally how I think we can read from the root-servers.txt and put
 //all the addresses in a list. I don't think the way I return in this function
 //is right yet though, and same with the type of function it is
-char * getRootServers()//char * file)
+char ** getRootServers(char * file)
 {
 	FILE *root_file;
-	char root_list[16];
+	size_t len = 0;
+	ssize_t read;
 
-	root_file = fopen("root-servers.txt", "r");
+	//maximum of 128 lines can be read in	
+	char ** root_list = (char **) malloc(128 * sizeof(char *));
 
-	//for (int i = 0; i < len(root_file); i++)
-	//{
-		//fscanf(root_file, "%s", root_list[i]);  
-	//}
+	root_file = fopen(file, "r");
 
+	if (root_file == NULL) {
+		printf("error opening root file");
+		return NULL;
+	}
+
+	int lineCount = 0;
+	//read file line by line 
+	while ((read = getline(&root_list[lineCount], &len, root_file)) != -1) {
+		//root_list[lineCount] = line;
+        printf("Retrieved line of length %zu:\n", read);
+        printf("%s", root_list[lineCount]);
+		lineCount++;
+    }
+	
 	fclose(root_file);
-	return NULL;
-	//	return root_list; 
+	//free(line);
+	return root_list; 
 }
 
 /**
@@ -206,6 +219,10 @@ int construct_query(uint8_t* query, char* hostname, bool isMX) {
  *   resolved, NULL will be returned.
  */
 char* resolve(char *hostname, bool is_mx) {
+	//this will probably be moved but its here for testing
+	char ** root_list = getRootServers("root-servers.txt");
+	
+	printf("%s\n", root_list[1]);
 
 	if (is_mx == false) {
 		printf("Requesting A record for %s\n", hostname);
