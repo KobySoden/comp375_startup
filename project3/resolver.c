@@ -53,10 +53,15 @@ DNSRecord getRecord(uint8_t *response){
 	//
 	//not sure if this will store it properly because of the periods in the
 	//address
-	record.data = (response[12]<<24) + (response[13]<<16) + (response[14]<<8) + response[15];
-
+	record.data = (uint8_t*) malloc(record.datalen * sizeof(uint8_t));
+	if (DEBUG) printf("record data: ");
+	for (int i = 0; i < record.datalen; i++){
+		record.data[i] = response[12+i];
+		if (DEBUG && record.datalen == 4) printf("%03d.", record.data[i]);
+		if (DEBUG && record.datalen != 4) printf("%02x.", record.data[i]);
+	}	
 	if(DEBUG){
-		printf("record name: %04x ",record.name);	
+		printf(" record name: %04x ",record.name);	
 		printf("record type: %04x ",record.type);
 		printf("record class: %04x ",record.class);
 		printf("record ttl: %08x ",record.ttl);
@@ -81,26 +86,22 @@ int getNameLength(uint8_t *name){
 //this is generally how I think we can read from the root-servers.txt and put
 //all the addresses in a list. I don't think the way I return in this function
 //is right yet though, and same with the type of function it is
-char ** getRootServers(char * file);
+char * getRootServers()//char * file)
 {
 	FILE *root_file;
-	char root_list[];
+	char root_list[16];
 
 	root_file = fopen("root-servers.txt", "r");
 
-	for (int i = 0; i < len(root_file); i++)
-	{
-		fscanf(root_file, "%s", root_list[i]);  
-	}
+	//for (int i = 0; i < len(root_file); i++)
+	//{
+		//fscanf(root_file, "%s", root_list[i]);  
+	//}
 
 	fclose(root_file);
-
-	return root_list[]; 
+	return NULL;
+	//	return root_list; 
 }
-
-
-
-
 
 /**
  * Function that returns a string with the IP address for a record of type A
@@ -111,16 +112,16 @@ char ** getRootServers(char * file);
  * @return A string representation of an IP address or mail server. If the
  * request could not be resolved then None is returned
  */
-char * resolve(char * hostname, bool is_MX)
-{
-	printf("Hostname: %s", hostname); 
+//char * resolve(char * hostname, bool is_MX)
+//{
+	//printf("Hostname: %s", hostname); 
 
-	int query_type = 1;
+	//int query_type = 1;
 
-	int query = constructQuery(ID, hostname, query_type);
+	//int query = constructQuery(ID, hostname, query_type);
 
 
-}
+//}
 
 //unsure of return value needs to recursively call resolve until we get the
 //right response
@@ -136,10 +137,10 @@ char * resolve(char * hostname, bool is_MX)
  * @return A buffer of answer records or nothing if the query could not be
  * resolved.
  */
-bool recurseResolve(int ID, char * hostname, uint8_t qType, char ** rootList, int timeout)
-{
+//bool recurseResolve(int ID, char * hostname, uint8_t qType, char ** rootList, int timeout)
+//{
 
-}
+//}
 
 
 // Note: uint8_t* is a pointer to 8 bits of data.
@@ -237,9 +238,9 @@ char* resolve(char *hostname, bool is_mx) {
 	// The following is the IP address of USD's local DNS server. It is a
 	// placeholder only (i.e. you shouldn't have this hardcoded into your final
 	// program).
-	in_addr_t nameserver_addr = inet_addr("172.16.7.15");
+	//in_addr_t nameserver_addr = inet_addr("172.16.7.15");
 	
-	//in_addr_t nameserver_addr = inet_addr("198.41.0.4");
+	in_addr_t nameserver_addr = inet_addr("198.41.0.4");
 	
 	struct sockaddr_in addr; 	// internet socket address data structure
 	addr.sin_family = AF_INET;
