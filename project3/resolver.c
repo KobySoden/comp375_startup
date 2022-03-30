@@ -70,6 +70,12 @@ DNSRecord getRecord(uint8_t *response){
 	return record;
 }
 
+void freeRecords(DNSRecord * records, int numRecords){
+	for(int i = 0; i < numRecords; i++){
+		free(records[i].data);
+	}
+}
+
 int getNameLength(uint8_t *name){
 	int pointer=0;
 	int length=0;
@@ -105,14 +111,12 @@ char ** getRootServers(char * file)
 	int lineCount = 0;
 	//read file line by line 
 	while ((read = getline(&root_list[lineCount], &len, root_file)) != -1) {
-		//root_list[lineCount] = line;
         printf("Retrieved line of length %zu:\n", read);
         printf("%s", root_list[lineCount]);
 		lineCount++;
     }
 	
 	fclose(root_file);
-	//free(line);
 	return root_list; 
 }
 
@@ -203,8 +207,6 @@ char* resolve(char *hostname, bool is_mx) {
 	//this will probably be moved but its here for testing
 	char ** root_list = getRootServers("root-servers.txt");
 	
-	printf("%s\n", root_list[1]);
-
 	if (is_mx == false) {
 		printf("Requesting A record for %s\n", hostname);
 	}
@@ -300,9 +302,6 @@ char* resolve(char *hostname, bool is_mx) {
 		// I think this is where we handle type: A = ipv4 AAAA = ipv6 MX= mail
 		// server CNAME = canonical name 
 		//if (Answers[i].type == 1)
-			//this gives a seg fault rn because we arent adding data to the
-			//records yet in the getrecord function
-			//printf("Found an ipv4 address!\n Here it is: %d.%d.%d.%d\n", Answers[i].data[0], Answers[i].data[1], Answers[i].data[2], Answers[i].data[3]);
 	}		
 	
 	//make array of auth servers
@@ -324,8 +323,13 @@ char* resolve(char *hostname, bool is_mx) {
 		if(DEBUG) printf("index: %d\n ", recordIndex);	
 	}
 	
+	freeRecords(Answers, head.a_count);
+	freeRecords(AuthRecords, head.auth_count);
+	freeRecords(AddRecords, head.other_count);
+
 	//we need to call this same function the the ip addresses of the auth
-	//responses 
+	//responses
+	 
 	return NULL;
 }
 
