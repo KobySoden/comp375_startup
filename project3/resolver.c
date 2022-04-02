@@ -121,26 +121,6 @@ char ** getRootServers(char * file)
 }
 
 
-//unsure of return value needs to recursively call resolve until we get the
-//right response
-/**
- * Recursive call for resolve() that iteratively traverses the hierarchy of
- * servers (Root, TLD, Authoritative) until obtaining a list of answer
- * responses, which it returns.
- *
- * @param hostname The host we are trying to resolve
- * @param qType An integer representing the type of query
- * @param rootList Pointer to a character pointer list of servers to query
- * @param timeout An integer that is set when the socket timeouts
- * @return A buffer of answer records or nothing if the query could not be
- * resolved.
- */
-//bool recurseResolve(int ID, char * hostname, uint8_t qType, char ** rootList, int timeout)
-//{
-
-//}
-
-
 // Note: uint8_t* is a pointer to 8 bits of data.
 
 /**
@@ -329,7 +309,7 @@ char* resolve(char *hostname, bool is_mx) {
 
 	//we need to call this same function the the ip addresses of the auth
 	//responses
-	 
+
 	return NULL;
 }
 
@@ -348,43 +328,94 @@ char* resolve(char *hostname, bool is_mx) {
  * @return A buffer of answer records or nothing if the query could not be
  * resolved.
  */
-//bool recurseResolve(int ID, char * hostname, uint8_t qType, char ** rootList, int timeout)
-//{
-//	for (int i = 0; i < len(root_list[]); i++)
-//	{
-//		
-//	int query_len=construct_query(query, hostname, is_mx);
-//
-//
-//	// create a UDP (i.e. Datagram) socket
-//	int sock = socket(AF_INET, SOCK_DGRAM, 0);
-//	if (sock < 0) {
-//		perror("socket");
-//		exit(0);
-//	}
-//	// Create a time value structure and set it to five seconds.
-//	struct timeval tv;
-//	memset(&tv, 0, sizeof(struct timeval));
-//	tv.tv_sec = 5;
-//
-//	/* Tell the OS to use that time value as a time out for operations on
-//	 * our socket. */
-//	int res = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv,
-//			sizeof(struct timeval));
-//
-//	if (res < 0) {
-//		perror("setsockopt");
-//		exit(0);
-//	}
-//
-//	}
-//}
+char* recurseResolve(char * hostname, int queryType, char ** rootList, int timeout)
+{
+	char ** root_list = getRootServers("root-servers.txt");
+
+	for (int i = 0; i < len(root_list[]); i++)
+	{
+		
+	int query_len=construct_query(query, hostname, is_mx);
+
+
+	// create a UDP (i.e. Datagram) socket
+	int sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock < 0) {
+		perror("socket");
+		exit(0);
+	}
+	// Create a time value structure and set it to five seconds.
+	struct timeval tv;
+	memset(&tv, 0, sizeof(struct timeval));
+	tv.tv_sec = 5;
+
+	/* Tell the OS to use that time value as a time out for operations on
+	 * our socket. */
+	int res = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv,
+			sizeof(struct timeval));
+
+	if (res < 0) {
+		perror("setsockopt");
+		exit(0);
+	}
+	
+//TODO this is kind of what I'm thinking for the logic behind recursively
+//iterating	but I don't know how to add the server's response to the
+//structures of records you made
+
+	//sends the first root server from the text file
+	if (timeout == 0)
+	{
+		send_count = sendto(query_len, (i, 53));
+		printf("Querying the server: %c", root_list[0]);
+	}
+	//if the query times out try to send another query to the next server
+	//listed
+	else if (timeout == 1)
+	{
+		send_count = sendto(query_len, (root_list[1], 53));
+		printf("Querying the server: %c", root_list[1]);
+	}
+
+	int response = send_count;
+	response = recv(4096);
+	printf("Query response received, unpacking the query now");
+	if (response == -1)
+		{
+			printf("Server error");
+			return NULL;
+		}
+	else if (response == 0)
+		{
+			printf("Connection closed");
+			return NULL;
+		}
+
+	else if (authrecord > 0)
+		{
+			return recurseResolve(hostname, queryType, authrecordsbuffer, 0);
+		}
+
+	else if (addrecord > 0)
+		{
+			return recurseResolve(hostname, queryType, addrecordsbuffer, 0);
+		}
+
+	//if socket timeouts
+	//print("The connection timed out, trying to reconnect);
+	//return recurseResolve(hostname, queryType, root_list, 1);
+	//
+	return NULL;
+
+	}
 
 
 int main(int argc, char **argv) {
 	bool isMX;
 	char *url;
-	
+	int queryType = 1; //Type A has a "Type" value of 1
+//	char www[] = "www";
+
 	//one CLI input
 	if(argc == 2){
 		isMX = false;
@@ -394,8 +425,15 @@ int main(int argc, char **argv) {
 	else if (argc == 3) {
 		if (strcmp(argv[1], "-m") == 0) {
 			isMX = true;
+			queryType = 15; //Type value of 15 since we know now that it is Type MX after checking
 			url = argv[2];
+			if (sys.argv[3][0] == "w" && sys.argv[3][1] == "w" && sys.argv[3][2] == "w"){
+				printf("Cannot resolve MX subdomain request request (SOA), please try again with the domain hostname");
+				return 1;
+			}
+
 			//TODO need to chop off www from the url here
+
 		}
 		//bad flag
 		else { 
