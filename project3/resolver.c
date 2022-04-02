@@ -16,6 +16,8 @@
 #define MAX_RESPONSE_SIZE 4096
 #define DNS_HEADER_SIZE 12
 #define DEBUG true
+#define Atype 1
+#define MXtype 15
 
 //store header in struct
 DNSHeader getHeader(uint8_t *response){
@@ -171,6 +173,24 @@ int construct_query(uint8_t* query, char* hostname, bool isMX) {
 	return query_len;
 }
 
+char* getIPFromRecord(DNSRecord record) {
+			char * str = (char*)malloc(30 * sizeof(char));
+			char * str2 = (char*)malloc(30 * sizeof(char));
+			
+			memset(str, 0, 30* sizeof(char));
+			for(int j = 0; j < record.datalen; j++)
+			{					
+				sprintf(str2, "%d", (int)record.data[j]);
+				strcat(str, str2);
+				if (j < record.datalen - 1) strcat(str, ".");
+			}
+
+			free(str2);
+			return str;
+	}
+	
+
+
 /**
  * Returns a string with the IP address (for an A record) or name of mail
  * server associated with the given hostname.
@@ -218,9 +238,12 @@ char* resolve(char *hostname, bool is_mx) {
 	// The following is the IP address of USD's local DNS server. It is a
 	// placeholder only (i.e. you shouldn't have this hardcoded into your final
 	// program).
-	//in_addr_t nameserver_addr = inet_addr("172.16.7.15");
+	in_addr_t nameserver_addr = inet_addr("172.16.7.15");
 	
-	in_addr_t nameserver_addr = inet_addr("198.41.0.4");
+	//in_addr_t nameserver_addr = inet_addr("198.41.0.4");
+	
+	//in_addr_t nameserver_addr = inet_addr(root_list[0]);
+
 	
 	struct sockaddr_in addr; 	// internet socket address data structure
 	addr.sin_family = AF_INET;
@@ -279,9 +302,14 @@ char* resolve(char *hostname, bool is_mx) {
 		recordIndex += 12 + Answers[i].datalen;
 		if(DEBUG) printf("index: %d\n ", recordIndex);	
 	
+		
 		// I think this is where we handle type: A = ipv4 AAAA = ipv6 MX= mail
 		// server CNAME = canonical name 
-		//if (Answers[i].type == 1)
+		if (Answers[i].type == Atype) return getIPFromRecord(Answers[i]);
+					
+		else if (Answers[i].type == MXtype) return getIPFromRecord(Answers[i]);
+	
+
 	}		
 	
 	//make array of auth servers
@@ -328,7 +356,7 @@ char* resolve(char *hostname, bool is_mx) {
  * @return A buffer of answer records or nothing if the query could not be
  * resolved.
  */
-char* recurseResolve(char * hostname, int queryType, char ** rootList, int timeout)
+/*char* recurseResolve(char * hostname, int queryType, char ** rootList, int timeout)
 {
 	char ** root_list = getRootServers("root-servers.txt");
 
@@ -349,8 +377,8 @@ char* recurseResolve(char * hostname, int queryType, char ** rootList, int timeo
 	memset(&tv, 0, sizeof(struct timeval));
 	tv.tv_sec = 5;
 
-	/* Tell the OS to use that time value as a time out for operations on
-	 * our socket. */
+	* Tell the OS to use that time value as a time out for operations on
+	 * our socket. 
 	int res = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv,
 			sizeof(struct timeval));
 
@@ -400,7 +428,12 @@ char* recurseResolve(char * hostname, int queryType, char ** rootList, int timeo
 		{
 			return recurseResolve(hostname, queryType, addrecordsbuffer, 0);
 		}
-
+	
+	else if (answerrecord > 0)
+		{
+			printf("We have received an answer: %s", answerrecord.data);
+			return answerrecord.data;
+		}
 	//if socket timeouts
 	//print("The connection timed out, trying to reconnect);
 	//return recurseResolve(hostname, queryType, root_list, 1);
@@ -408,12 +441,12 @@ char* recurseResolve(char * hostname, int queryType, char ** rootList, int timeo
 	return NULL;
 
 	}
-
+*/
 
 int main(int argc, char **argv) {
 	bool isMX;
 	char *url;
-	int queryType = 1; //Type A has a "Type" value of 1
+//	int queryType = 1; //Type A has a "Type" value of 1
 //	char www[] = "www";
 
 	//one CLI input
@@ -425,12 +458,13 @@ int main(int argc, char **argv) {
 	else if (argc == 3) {
 		if (strcmp(argv[1], "-m") == 0) {
 			isMX = true;
-			queryType = 15; //Type value of 15 since we know now that it is Type MX after checking
+//			queryType = 15; //Type value of 15 since we know now that it is Type MX after checking
 			url = argv[2];
-			if (sys.argv[3][0] == "w" && sys.argv[3][1] == "w" && sys.argv[3][2] == "w"){
-				printf("Cannot resolve MX subdomain request request (SOA), please try again with the domain hostname");
-				return 1;
-			}
+	//		if (&argv[3][0] == "w" && &argv[3][1] == "w" && &argv[3][2] == "w")
+	//		{
+	//			printf("Cannot resolve MX subdomain request request (SOA), please try again with the domain hostname");
+	//			return 1;
+	//		}
 
 			//TODO need to chop off www from the url here
 
