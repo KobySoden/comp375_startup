@@ -457,59 +457,157 @@ char* resolve(char *hostname, bool is_mx) {
 	return NULL;
 }
 
+void printErrorMessages() {
+
+	printf("Invalid program usage\n");
+	printf("Format for using this program for a Type A record request: ./resolver [insert subdomain hostname here]\n");	
+	printf("Example using this format: ./resolver www.google.com\n\n");
+	printf("Format for using this program for a Type MX record request: ./resolver -m [insert domain hostname here]\n");
+	printf("Example using this format: ./resolver -m google.com\n\n");
+}
 
 int main(int argc, char **argv) {
 	bool isMX;
 	char *url;
 
-	//one CLI input
+	//one CLI input meaning it is a Type A request
 	if(argc == 2){
 		isMX = false;
 		url = argv[1];
 	//	printf("\n%d\n", argv[1][((int)sizeof(argv[1])) - 1]);
-	//	printf("\n%d\n",(int)sizeof(argv[1])); 
+	//	printf("\n%d\n",(int)sizeof(argv[1]));
+	//	printf("\n%ld\n", (strlen(argv[1]))-1);
+	//	printf("\n%d\n", argv[1][strlen(argv[1])-1]);
+		
+	//if url does not start with a valid subdomain such as www, home, san, ole
+	//then print error messages
+	//
+	//
+		if (argv[1][0] == 119 && argv[1][1] == 119 && argv[1][2] == 119)
+		{
+		//continues if url starts with www
+		}
+		else if (argv[1][0] == 104 && argv[1][1] == 111 && argv[1][2] == 109 && argv[1][3] == 101)
+		{
+		//continues if url starts with home
+		}
+		else if (argv[1][0] == 115 && argv[1][1] == 97 && argv[1][2] == 110)
+		{
+		//continues if url starts with san
+		}
+		else if (argv[1][0] == 111 && argv[1][1] == 108 && argv[1][2] == 101)
+		{
+		//continues if url starts with ole
+		}
+		else
+		{
+			printErrorMessages(); //prints error messages if not any of the subdomains above
+			return 1;
+		}
+			
+//TODO need to find a way to check if the actual domain is valid. So far I've
+//been able handle invalid subdomains and TLDs but checking the domain is
+//tricky since I think you have to look at wireshark response for a bad domain
+//to determine how to check for an invalid one
+			
+	//if url does not end in a valid TLD such as .com, .net, .edu, .gov, .ru, .io then print error
+	//messages
+	//This checks the ascii of the characters
+		if (argv[1][strlen(argv[1])-3] == 99 && argv[1][strlen(argv[1])-2] == 111 && argv[1][strlen(argv[1])-1] == 109)
+		{
+		//	continues if url ends in .com
+		}
+		else if (argv[1][strlen(argv[1])-3] == 110 && argv[1][strlen(argv[1])-2] == 101 && argv[1][strlen(argv[1])-1] == 116)
+		{
+		//	continues if url ends in .net
+		}	
+		else if (argv[1][strlen(argv[1])-3] == 101 && argv[1][strlen(argv[1])-2] == 100 && argv[1][strlen(argv[1])-1] == 117)
+		{
+		//	continues if url ends in .edu
+		}
+		else if (argv[1][strlen(argv[1])-3] == 103 && argv[1][strlen(argv[1])-2] == 111 && argv[1][strlen(argv[1])-1] == 118)
+		{
+		//	continues if url ends in .gov
+		}
+		else if (argv[1][strlen(argv[1])-2] == 114 && argv[1][strlen(argv[1])-1] == 117)
+		{
+		//	continues if url ends in .ru 
+		}
+		else if (argv[1][strlen(argv[1])-2] == 105 && argv[1][strlen(argv[1])-1] == 111)
+		{
+		// continues ir url ends in .io
+		}
+		else
+		{
+			printErrorMessages(); //prints error messages if not any of the TLD's listed above
+			return 1;
+		}
+
 	}
-	//two CLI inputs
+	//two CLI inputs meaning it is a Type MX request
 	else if (argc == 3) {
 		if (strcmp(argv[1], "-m") == 0) {
 			isMX = true;
 			url = argv[2];
 		//	printf("\n%d\n", argv[2][3]);
 
-			//handles when requesting for a Type MX record with a subdomain of "www" when
-			//it should just be the domain. 119 = "w" in ascii
-			if (argv[2][0] == 119 && argv[2][1] == 119 && argv[2][2] == 119)
+			//handles when requesting for a Type MX record with a subdomain of www, home, san, ole when
+			//it should just be the domain. This checks the ascii of the
+			//characters
+			if ((argv[2][0] == 119 && argv[2][1] == 119 && argv[2][2] == 119)||(argv[1][0] == 104 && argv[1][1] == 111 && argv[1][2] == 109 && argv[1][3] == 101)||(argv[1][0] == 115 && argv[1][1] == 97 && argv[1][2] == 110)||(argv[1][0] == 111 && argv[1][1] == 108 && argv[1][2] == 101))
 			{
 				printf("\nCannot resolve MX subdomain request (SOA), please try again with the domain hostname\n");
 				return 1;
 			}
 
-			//handles when the 4 character in the url is a "." meaning they
-			//typed in a subdomain when it should just be a domain. 46 = "."
-			//in ascii
-			else if (argv[2][3] == 46) 
+//TODO need to find a way to check if the actual domain is valid. So far I've
+//been able handle invalid subdomains and TLDs but checking the domain is
+//tricky since I think you have to look at wireshark response for a bad domain
+//to determine how to check for an invalid one
+
+		//if url does not end in a valid TLD such as .com, .net, .edu, .gov, .ru, .io then print error
+		//messages
+		//This checks the ascii of the characters
+			if (argv[1][strlen(argv[1])-3] == 99 && argv[1][strlen(argv[1])-2] == 111 && argv[1][strlen(argv[1])-1] == 109)
+		 	{
+			//	continues if url ends in .com
+		    }
+			else if (argv[1][strlen(argv[1])-3] == 110 && argv[1][strlen(argv[1])-2] == 101 && argv[1][strlen(argv[1])-1] == 116)
 			{
-				printf("\nCannot resolve MX subdomain request (SOA), please try again with the domain hostname\n");
+			//	continues if url ends in .net
+			}	
+			else if (argv[1][strlen(argv[1])-3] == 101 && argv[1][strlen(argv[1])-2] == 100 && argv[1][strlen(argv[1])-1] == 117)
+			{
+			//	continues if url ends in .edu
+			}
+			else if (argv[1][strlen(argv[1])-3] == 103 && argv[1][strlen(argv[1])-2] == 111 && argv[1][strlen(argv[1])-1] == 118)
+			{
+			//	continues if url ends in .gov
+			}
+			else if (argv[1][strlen(argv[1])-2] == 114 && argv[1][strlen(argv[1])-1] == 117)
+			{
+			//	continues if url ends in .ru 
+			}
+			else if (argv[1][strlen(argv[1])-2] == 105 && argv[1][strlen(argv[1])-1] == 111)
+			{
+			// continues ir url ends in .io
+			}
+			else
+			{
+				printErrorMessages(); //prints error messages if not any of the TLD's listed above
 				return 1;
 			}
+
 		}
 		else { 
-			printf("Invalid program usage\n");
-			printf("Format for using this program for a Type A record request: ./resolver [insert subdomain hostname here]\n");	
-			printf("Example using this format: ./resolver www.google.com\n\n");
-			printf("Format for using this program for a Type MX record request: ./resolver -m [insert domain hostname here]\n");
-			printf("Example using this format: ./resolver -m google.com\n\n");
+			printErrorMessages();
 			return 1;
 		}
 	}
 	//wrong number of inputs. print out usage here
 	else {
 		// TODO: provide a more helpful message on how to use the program
-		printf("Invalid program usage for %s!\n", argv[0]);
-		printf("Format for using this program for a Type A record request: ./resolver [insert subdomain hostname here]\n");	
-		printf("Example using this format: ./resolver www.google.com\n\n");
-		printf("Format for using this program for a Type MX record request: ./resolver -m [insert domain hostname here]\n");
-		printf("Example using this format: ./resolver -m google.com\n\n");
+		printErrorMessages();
 		return 1;
 	}
 
