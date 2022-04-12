@@ -1,5 +1,5 @@
 # replace X with group number
-GROUP_NUM=X
+GROUP_NUM=8
 
 # DO NOT CHANGE ANYTHING BELOW THIS POINT
 
