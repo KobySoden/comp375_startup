@@ -75,7 +75,7 @@ void ReliableSocket::accept_connection(int port_num) {
 
 	struct sockaddr_in fromaddr;
 	unsigned int addrlen = sizeof(fromaddr);
-	int recv_count = recvfrom(this->sock_fd, segment, MAX_SEG_SIZE, 0, 
+	int recv_count = recvfrom(this->sock_fd, segment, sizeof(RDTHeader), 0, 
 								(struct sockaddr*)&fromaddr, &addrlen);		
 	if (recv_count < 0) {
 		perror("accept recvfrom");
@@ -136,11 +136,11 @@ void ReliableSocket::accept_connection(int port_num) {
 	}
 
 	//Debug Stuff
-	cerr <<"Reciever\n";
-	for(int i = 0; i < MAX_SEG_SIZE; i++){
-		cerr << std::to_string(segment[i]);
-	}
-	cerr <<"\n";
+//	cerr <<"Reciever\n";
+//	for(int i = 0; i < MAX_SEG_SIZE; i++){
+//		cerr << std::to_string(segment[i]);
+//	}
+//	cerr <<"\n";
 
 	this->state = ESTABLISHED;
 	cerr << "INFO: Connection ESTABLISHED\n";
@@ -259,11 +259,13 @@ void ReliableSocket::send_data(const void *data, int length) {
 	hdr->sequence_number = htonl(sequence_number);
 	hdr->ack_number = htonl(0);
 	hdr->type = RDT_DATA;
-
+	hdr->length = htonl(length);
 	// Copy the user-supplied data to the spot right past the 
 	// 	header (i.e. hdr+1).
 	memcpy(hdr+1, data, length);
 	
+	//PrintSegment(segment, length + sizeof(RDTHeader));
+
 	//start timer for rtt here	
 	if (send(this->sock_fd, segment, sizeof(RDTHeader)+length, 0) < 0) {
 		cerr << "send_data send\n";
@@ -276,16 +278,19 @@ void ReliableSocket::send_data(const void *data, int length) {
 	// Utilize the set_timeout_length function to make sure you timeout after
 	// a certain amount of waiting (so you can try sending again).
 
+	set_timeout_length(10);
 	//wait for response on timeout resend packet	
-	int recv_count = recv(this->sock_fd, segment, MAX_SEG_SIZE, 0);
+	int recv_count = recv(this->sock_fd, segment, sizeof(RDTHeader), 0);
 	if (recv_count < 0) {
-		cerr << "send_data recv\n";
-		send_data(data, length);
+		cerr << "Did not receive ack, sending full packet back\n";
+		//send_data(data, length);
+		return;
 	}
 	//end timer for rtt here
 
 	// TODO: Testing
-	PrintSegment(segment, sizeof(RDTHeader));
+	//cerr << "Seg Recieved: \n";
+	//PrintSegment(segment, sizeof(RDTHeader));
 	
 	//check that recieved packet is type ACK and that we recieved the right
 	//ack number might need to add another conditional for seq #
@@ -300,11 +305,12 @@ void ReliableSocket::send_data(const void *data, int length) {
 	}
 	//retry send
 	else {
-		int data_sent = 8*(int)ntohl(hdr->ack_number);
-		data += data_sent;
-		length -= data_sent;
+		int data_sent = ntohl(hdr->ack_number);
+	//	data += data_sent;
+	//	length -= data_sent;
 		cerr << "retry send. Other side received:" << data_sent << "bytes\n";
-		send_data(data, length);
+		//send_data(data, length);
+		return;
 	}
 }
 
@@ -386,6 +392,7 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 	//set header type to ack to send back
 	hdr->type = RDT_ACK;
 	
+	set_timeout_length(10);
 	//send ack
 	if (send(this->sock_fd, received_segment, sizeof(RDTHeader), 0) < 0) {
 		perror("send ack");

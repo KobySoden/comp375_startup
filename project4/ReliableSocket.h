@@ -16,6 +16,7 @@ enum RDTMessageType : uint8_t {RDT_CONN, RDT_CLOSE, RDT_ACK, RDT_DATA};
 struct RDTHeader {
 	uint32_t sequence_number;
 	uint32_t ack_number;
+	uint32_t length;
 	RDTMessageType type;
 };
 
@@ -96,7 +97,7 @@ private:
 	int dev_rtt;
 	connection_status state;
 
-	// In the (unlikely?) event you need a new field, add it here.
+	// In the (unlik:ely?) event you need a new field, add it here.
 
 	/**
 	 * Sets the timeout length of this connection.
