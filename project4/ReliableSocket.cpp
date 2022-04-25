@@ -263,7 +263,8 @@ void ReliableSocket::send_data(const void *data, int length) {
 
 	if (send(this->sock_fd, segment, sizeof(RDTHeader)+length, 0) < 0) {
 		cerr << "send_data send\n";
-		exit(EXIT_FAILURE);
+		//exit(EXIT_FAILURE);
+		//TODO not sure how to handle recursion in this function
 		send_data(data, length);
 		return;
 	}
@@ -319,7 +320,10 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 	int recv_count = recv(this->sock_fd, received_segment, MAX_SEG_SIZE, 0);
 	if (recv_count < 0) {
 		cerr << "receive_data recv\n";
-		receive_data(buffer);
+		//TODO we need to figure out how to start listening for a response
+		//here again if we fail to receive anything from the sender
+
+		return receive_data(buffer);
 		//exit(EXIT_FAILURE);
 	}
 
@@ -362,16 +366,18 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 		 	<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
 		 	<< ", type = " << hdr->type << " length: " << ntohl(hdr->length) << "\n";
 
+		//send ack
 		set_timeout_length(10);
 		if (send(this->sock_fd, received_segment, sizeof(RDTHeader), 0) < 0) {
 			cerr << "receive_data ack\n";
-			receive_data(buffer);
+			//TODO we need to figure out how to handle acks that cant be sent
+			return receive_data(buffer);
 			//exit(EXIT_FAILURE);
 		}
 	
 	}
 	cerr << "End of Receive function\n";
-	return 0;
+	return receive_data(buffer);
 }
 
 
