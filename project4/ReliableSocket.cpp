@@ -246,23 +246,56 @@ void ReliableSocket::send_data(const void *data, int length) {
 	hdr->sequence_number = htonl(sequence_number);
 	hdr->ack_number = htonl(0);
 	hdr->type = RDT_DATA;
+	//add length of data to message header
+	hdr->length = htonl(length);
 
 	// Copy the user-supplied data to the spot right past the 
 	// 	header (i.e. hdr+1).
 	memcpy(hdr+1, data, length);
 	
-	if (send(this->sock_fd, segment, sizeof(RDTHeader)+length, 0) < 0) {
-		perror("send_data send");
-		exit(EXIT_FAILURE);
-	}
+	//set timeout value
+	set_timeout_length(10);
+	
+	cerr << "INFO: Sent segment. " 
+		 << "seq_num = "<< ntohl(hdr->sequence_number) << ", "
+		 << "ack_num = "<< ntohl(hdr->ack_number) << ", "
+		 << ", type = " << hdr->type << " length: " << ntohl(hdr->length) << "\n";
 
+	if (send(this->sock_fd, segment, sizeof(RDTHeader)+length, 0) < 0) {
+		cerr << "send_data send\n";
+		exit(EXIT_FAILURE);
+		send_data(data, length);
+		return;
+	}
+	
 	// TODO: This assumes a reliable network. You'll need to add code that
 	// waits for an acknowledgment of the data you just sent, and keeps
 	// resending until that ack comes.
 	// Utilize the set_timeout_length function to make sure you timeout after
 	// a certain amount of waiting (so you can try sending again).
-
-	sequence_number++;
+	
+	int recv_count = recv(this->sock_fd, segment, sizeof(RDTHeader), 0);
+	//no ack recieved
+	if (recv_count < 0) {
+		cerr << "send_data ack\n";
+		send_data(data, length);
+		return;
+		//exit(EXIT_FAILURE);
+	}
+	
+	cerr << "INFO: Received segment. " 
+		 << "seq_num = "<< ntohl(hdr->sequence_number) << ", "
+		 << "ack_num = "<< ntohl(hdr->ack_number) << ", "
+		 << ", type = " << hdr->type << " length: " << ntohl(hdr->length) << "\n";
+	
+	if(hdr->type == RDT_ACK){
+		//current segment is being acked	
+		if(ntohl(hdr->sequence_number) == sequence_number){
+			sequence_number++;
+		}
+		//add case for old ack
+		
+	}
 }
 
 
@@ -279,11 +312,15 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 	// the received segment.
 	RDTHeader* hdr = (RDTHeader*)received_segment;	
 	void *data = (void*)(received_segment + sizeof(RDTHeader));
+	
+	//set timeout value
+	set_timeout_length(10);
 
 	int recv_count = recv(this->sock_fd, received_segment, MAX_SEG_SIZE, 0);
 	if (recv_count < 0) {
-		perror("receive_data recv");
-		exit(EXIT_FAILURE);
+		cerr << "receive_data recv\n";
+		receive_data(buffer);
+		//exit(EXIT_FAILURE);
 	}
 
 	// TODO: You should send back some sort of acknowledment that you
@@ -294,12 +331,47 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 	cerr << "INFO: Received segment. " 
 		 << "seq_num = "<< ntohl(hdr->sequence_number) << ", "
 		 << "ack_num = "<< ntohl(hdr->ack_number) << ", "
-		 << ", type = " << hdr->type << "\n";
+		 << ", type = " << hdr->type << " length: " << ntohl(hdr->length) << "\n";
+	
+	if(hdr->type == RDT_CLOSE){
+		//not finalized yet but this is where we exit
+		this->state = CLOSED;
+		return 0;
+	}
+	if(hdr->type == RDT_DATA) {
+		//sequence number matches, length matches 
+		if(ntohl(hdr->sequence_number) == expected_sequence_number &&
+			ntohl(hdr->length) == recv_count - sizeof(RDTHeader)){
+			//change header to ack
+			hdr->type = RDT_ACK;
+			
+			expected_sequence_number ++;
+			sequence_number++;
+			
+			int	recv_data_size = recv_count - sizeof(RDTHeader);
+			memcpy(buffer, data, recv_data_size);
+			
+			return recv_data_size;
+		}
+		else if(ntohl(hdr->sequence_number) < expected_sequence_number){
+			hdr->type = RDT_ACK;
+			
+		}
+		cerr << "INFO: Response segment. " 
+			 << "seq_num = "<< ntohl(hdr->sequence_number) << ", "
+		 	<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
+		 	<< ", type = " << hdr->type << " length: " << ntohl(hdr->length) << "\n";
 
-	int recv_data_size = recv_count - sizeof(RDTHeader);
-	memcpy(buffer, data, recv_data_size);
-
-	return recv_data_size;
+		set_timeout_length(10);
+		if (send(this->sock_fd, received_segment, sizeof(RDTHeader), 0) < 0) {
+			cerr << "receive_data ack\n";
+			receive_data(buffer);
+			//exit(EXIT_FAILURE);
+		}
+	
+	}
+	cerr << "End of Receive function\n";
+	return 0;
 }
 
 
