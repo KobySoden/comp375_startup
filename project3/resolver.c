@@ -102,7 +102,7 @@ char ** getRootServers(char * file)
 
 	//maximum of 128 lines can be read in	
 	char ** root_list = (char **) malloc(128 * sizeof(char *));
-
+	memset(root_list, 0, 128 * sizeof(char *));
 	root_file = fopen(file, "r");
 
 	if (root_file == NULL) {
@@ -176,6 +176,7 @@ char* getIPFromRecord(DNSRecord record) {
 			char * str2 = (char*)malloc(30 * sizeof(char));
 			
 			memset(str, 0, 30* sizeof(char));
+			memset(str2, 0, 30* sizeof(char));
 			for(int j = 0; j < record.datalen; j++)
 			{					
 				sprintf(str2, "%d", (int)record.data[j]);
@@ -210,9 +211,10 @@ char* recurseResolve(char *hostname, bool is_mx, char *server) {
 		perror("setsockopt");
 		exit(0);
 	}
-
+	
 	in_addr_t nameserver_addr = inet_addr(server);
-
+	
+	printf("Name Server ADDR: %d\n", nameserver_addr);
 	struct sockaddr_in addr; 	// internet socket address data structure
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(53); // port 53 for DNS
@@ -241,12 +243,15 @@ char* recurseResolve(char *hostname, bool is_mx, char *server) {
 	res = recvfrom(sock, response, MAX_RESPONSE_SIZE, 0, 
 					(struct sockaddr *)&addr, &len);
 
+	if(DEBUG) printf("Length of response: %d\n", res);
+	
 	if (res < 1) {
 		if (errno == EAGAIN) {
 			printf("Timed out!\n\n");
 		} else {
 			perror("recv");
 		}
+		return NULL;
 	}
 	
 	//read the header into a struct
@@ -266,8 +271,16 @@ char* recurseResolve(char *hostname, bool is_mx, char *server) {
 		if(DEBUG) printf("index: %d\n ", recordIndex);	
 	
 		// I think this is where we handle type: A = ipv4 AAAA = ipv6 MX= mail 
-		if (Answers[i].type == Atype) return getIPFromRecord(Answers[i]);
-					
+		if (Answers[i].type == Atype)
+		{
+			 if(DEBUG){
+				 char * ip = getIPFromRecord(Answers[i]); 
+				 printf("We found the IP! %s", ip);
+				 free(ip);
+			 	 exit(0);
+			 }
+			 return getIPFromRecord(Answers[i]);
+		}			
 		//else if (Answers[i].type == MXtype) return getIPFromRecord(Answers[i]);
 	}		
 	
@@ -430,7 +443,11 @@ char* resolve(char *hostname, bool is_mx) {
 		
 		
 		//entrypoint to recursion
-		if (AuthRecords[i].datalen == 4) recurseResolve(hostname, is_mx, getIPFromRecord(AuthRecords[i]));
+		if (AuthRecords[i].datalen == 4){ 
+			char * serverIp = getIPFromRecord(AuthRecords[i]);
+			char * ip = recurseResolve(hostname, is_mx, serverIp);
+			free(serverIp);
+		}
 	}
 	
 	//make array of additional records not sure if we need this but its easy
@@ -447,10 +464,17 @@ char* resolve(char *hostname, bool is_mx) {
 	freeRecords(AuthRecords, head.auth_count);
 	freeRecords(AddRecords, head.other_count);
 
-	
-	//nothing happens here we move on to the next ip in the file
 	int k = 0;
-	while(recurseResolve(hostname, is_mx, root_list[k]) == NULL) k++;	
+	while(root_list[k] != 0){	 
+		char *ip_all = recurseResolve(hostname, is_mx, root_list[k]);
+		k+=1;	
+	}
+	for (int i = 0; i < 128; i++){
+		free(root_list[i]);	
+	}
+	free(root_list);
+
+//	while(root_list[k] != NULL && recurseResolve(hostname, is_mx, root_list[k]) == NULL) k++;	
 	//we need to call this same function the the ip addresses of the auth
 	//responses
 
@@ -619,6 +643,6 @@ int main(int argc, char **argv) {
 	else {
 		printf("Could not resolve request.\n");
 	}
-
+	free(answer);
 	return 0;
 }
