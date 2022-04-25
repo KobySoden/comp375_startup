@@ -61,82 +61,87 @@ void ReliableSocket::accept_connection(int port_num) {
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(port_num);
 	addr.sin_addr.s_addr = INADDR_ANY;
-	if ( bind(this->sock_fd, (struct sockaddr*)&addr, sizeof(addr)) ) {
+	if (bind(this->sock_fd, (struct sockaddr*)&addr, sizeof(addr)) ) {
 		perror("bind");
 	}
 
 	// Wait for a segment to come from a remote host
 	char segment[MAX_SEG_SIZE];
 	memset(segment, 0, MAX_SEG_SIZE);
+	RDTHeader* hdr = (RDTHeader*)segment;
 
+	//declaring variables used in state machine
 	struct sockaddr_in fromaddr;
 	unsigned int addrlen = sizeof(fromaddr);
-	int recv_count = recvfrom(this->sock_fd, segment, MAX_SEG_SIZE, 0, 
-								(struct sockaddr*)&fromaddr, &addrlen);		
-	if (recv_count < 0) {
-		perror("accept recvfrom");
-		exit(EXIT_FAILURE);
-	}
-
-	/*
-	 * UDP isn't connection-oriented, but calling connect here allows us to
-	 * remember the remote host (stored in fromaddr).
-	 * This means we can then use send and recv instead of the more complex
-	 * sendto and recvfrom.
-	 */
-	if (connect(this->sock_fd, (struct sockaddr*)&fromaddr, addrlen)) {
-		perror("accept connect");
-		exit(EXIT_FAILURE);
-	}
-
-	// Check that segment was the right type of message, namely a RDT_CONN
-	// message to indicate that the remote host wants to start a new
-	// connection with us.
-	RDTHeader* hdr = (RDTHeader*)segment;
-	if (hdr->type != RDT_CONN) {
-		cerr << "ERROR: Didn't get the expected RDT_CONN type.\n";
-		exit(EXIT_FAILURE);
-	}
+	int recv_count = 0;	
+	uint32_t ack = 0;
 	
-	//increment syn by one and set it as the ack number
-	uint32_t ack = ntohl(hdr->sequence_number) + 1;
-	hdr->ack_number = htonl(ack);
+	set_timeout_length(10);
+	while(1){
+		switch(this->state){
+			case INIT:
+				//receive response
+				recv_count = recvfrom(this->sock_fd, segment,
+				sizeof(RDTHeader), 0, (struct sockaddr*)&fromaddr, &addrlen);		
+				if(recv_count < 0){
+					cerr << "Did not receive syn\n";
+				}else if(connect(this->sock_fd, (struct sockaddr*)&fromaddr,
+				addrlen)){
+					cerr << "Cannot conenct sockets\n";
+				}else{
+					if(hdr->type != RDT_CONN){
+						cerr << "ERROR: Didn't get the expected RDT_CONN type.\n";
+					}else{	
+						cerr << "INFO: received segment. " 
+		 				<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
+		 				<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
+		 				<< "type = " << hdr->type << " length: " << ntohl(hdr->length) << "\n";
+						this->state = SYN_RECEIVED;
+					}	
+				}
+				break;
 
-	//hardcode syn number for now
-	hdr->sequence_number = htonl(75);
-	//send new header back to host
-	if (send(this->sock_fd, hdr, sizeof(RDTHeader), 0) < 0) {
-         perror("syn/ack");
-		 exit(EXIT_FAILURE);
-	}
-	this->state = SYN_SENT;
+			case SYN_RECEIVED:	
+				//increment syn by one and set it as the ack number
+				ack = ntohl(hdr->sequence_number) + 1;
+				hdr->ack_number = htonl(ack);
+				//hardcode syn number for now
+				hdr->sequence_number = htonl(75);
+					
+				//send new header back to host
+				if (send(this->sock_fd, hdr, sizeof(RDTHeader), 0) < 0) {
+         			cerr << "couldn't send  syn/ack\n";
+				}else this->state = SYN_SENT;
+				break;
 
-	//wait for response 
-	recv_count = recvfrom(this->sock_fd, segment, MAX_SEG_SIZE, 0, 
-								(struct sockaddr*)&fromaddr, &addrlen);		
-	if (recv_count < 0) {
-		perror("accept recvfrom");
-		exit(EXIT_FAILURE);
-	}
-		
-	//new ack should be old syn+1
-	if (ntohl(hdr->ack_number) != 75 + 1){
-		cerr << "Ack Number is wrong\n";
-		//shouldnt exit here we should send the syn again or something like
-		//that
-		exit(EXIT_FAILURE);	
-	}
+			case SYN_SENT:
+				recv_count = recvfrom(this->sock_fd, segment,
+				sizeof(RDTHeader), 0, (struct sockaddr*)&fromaddr, &addrlen);		
+				if(recv_count < 0){
+					cerr << "could not recieve ack for syn/ack\n";
+				}else if(hdr->type == RDT_DATA) {
+					cerr << "missed the ack but sender is sending data\n";
+					this->state = ESTABLISHED;
+				}
+				else if(ntohl(hdr->ack_number) == 75+1){
+					cerr << "Received proper ack:: "<< ntohl(hdr->ack_number)<< "\n";
+					this->state = ESTABLISHED;
+				}
+				else{
+					cerr << "Something weird happened\n";
+					this->state = SYN_RECEIVED;
+				}
+				break;
+
+			case ESTABLISHED:
+				cerr << "INFO: Connection ESTABLISHED\n";
+				return;
+			default:
+				break;
+		}
+	}	
 
 
-	//Debug Stuff
-	cerr <<"Reciever\n";
-	for(int i = 0; i < MAX_SEG_SIZE; i++){
-		cerr << std::to_string(segment[i]);
-	}
-	cerr <<"\n";
-
-	this->state = ESTABLISHED;
-	cerr << "INFO: Connection ESTABLISHED\n";
 }
 
 void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
@@ -150,6 +155,7 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 	addr.sin_family = AF_INET; 	// use IPv4
 	addr.sin_addr.s_addr = inet_addr(hostname);
 	addr.sin_port = htons(port_num); 
+	unsigned int addrlen = sizeof(addr);
 
 	/*
 	 * UDP isn't connection-oriented, but calling connect here allows us to
@@ -158,59 +164,73 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 	 * sendto and recvfrom.
 	 */
 	if(connect(this->sock_fd, (struct sockaddr*)&addr, sizeof(addr))) {
-		perror("connect");
+		cerr << "cannot connect socket\n";
 	}
-
-	// Send an RDT_CONN message to remote host to initiate an RDT connection.
+	
 	char segment[sizeof(RDTHeader)];
 	RDTHeader* hdr = (RDTHeader*)segment;
-	
 	//hardcoded syn num for now
 	long syncNum = 55;
+	int recv_count = 0;
 
-	hdr->ack_number = htonl(0);
-	hdr->sequence_number = htonl(syncNum);
-	hdr->type = RDT_CONN;
-	if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
-		perror("conn1 send");
-	}
-	this->state = SYN_SENT;
+	set_timeout_length(10);
+	while(1){
+		
+		switch(this->state){
+			case INIT:
+				// Send an RDT_CONN message to remote host to initiate an RDT connection.
+				hdr->ack_number = htonl(0);
+				hdr->sequence_number = htonl(syncNum);
+				hdr->type = RDT_CONN;
+				//debug
+				cerr << "INFO: sending segment. " 
+		 		<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
+		 		<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
+		 		<< ", type = " << hdr->type << " length: " << ntohl(hdr->length) << "\n";
+				
+				if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
+					cerr << "cannot send syn\n";
+				}else this->state = SYN_SENT;
+				
+				break;
 
-	
-	// Wait for a syn/ack from  a remote host
-	memset(segment, 0, sizeof(RDTHeader));
-
-	unsigned int addrlen = sizeof(addr);
-	int recv_count = recvfrom(this->sock_fd, segment, sizeof(RDTHeader), 0, 
+			case SYN_SENT:		
+				// Wait for a syn/ack from  a remote host
+				memset(segment, 0, sizeof(RDTHeader));
+				
+				recv_count = recvfrom(this->sock_fd, segment, sizeof(RDTHeader), 0, 
 								(struct sockaddr*)&addr, &addrlen);		
-	if (recv_count < 0) {
-		perror("accept recvfrom");
-		exit(EXIT_FAILURE);
-	}
+				if (recv_count < 0) {
+					cerr << "Did not receive SYN/ACK from remote host\n";
+					this->state = INIT;
+				}else if(hdr->type != RDT_CONN || ntohl(hdr->ack_number) !=
+				syncNum +1){
+					cerr << "wrong sequence number received or wrong type of packet\n";
+					this->state = INIT;
+				}else this->state = SYN_RECEIVED;
+				break;
 
-	//compare recieved syn with sent syn+1
-	if (ntohl(hdr->ack_number) != syncNum+1){
-		//add new state here maybe
-		cerr << "Syn/Ack not recieved correctly retry\n";
-		//shouldnt exit here we should retry sending syn or something
-		exit(EXIT_FAILURE);
-	}
+			case SYN_RECEIVED:
+				//increment syn by 1 and send it back as ack
+				hdr->ack_number = htonl(ntohl(hdr->sequence_number) + 1);
+				if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
+					cerr << "Failed to respond to SYN\n";
+				}else this->state = ESTABLISHED;
+				break;
 
-	//increment syn by 1 and send it back as ack
-	hdr->ack_number = htonl(ntohl(hdr->sequence_number) + 1);
-	if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
-		perror("conn2 send");
-	}
+			case ESTABLISHED: 
+				cerr << "INFO: CONNECTION ESTABLISHED\n";
+				return;
 
-	//Debug Stuff
-	cerr <<"Sender\n";
-	for(int i = 0; i < sizeof(RDTHeader); i++){
-		cerr << std::to_string(segment[i]);
-	}
-	cerr <<"\n";
-
-	this->state = ESTABLISHED;
-	cerr << "INFO: Connection ESTABLISHED\n";
+			default:
+				break;
+		}
+}
+	//unreacheable code here just didnt wanna delete it	
+	cerr << "INFO: received segment. " 
+		 << "seq_num = "<< ntohl(hdr->sequence_number) << ", "
+		 << "ack_num = "<< ntohl(hdr->ack_number) << ", "
+		 << ", type = " << hdr->type << " length: " << ntohl(hdr->length) << "\n";
 }
 
 
@@ -265,8 +285,7 @@ void ReliableSocket::send_data(const void *data, int length) {
 		cerr << "send_data send\n";
 		//exit(EXIT_FAILURE);
 		//TODO not sure how to handle recursion in this function
-		send_data(data, length);
-		return;
+		return send_data(data, length);
 	}
 	
 	// TODO: This assumes a reliable network. You'll need to add code that
@@ -279,9 +298,7 @@ void ReliableSocket::send_data(const void *data, int length) {
 	//no ack recieved
 	if (recv_count < 0) {
 		cerr << "send_data ack\n";
-		send_data(data, length);
-		return;
-		//exit(EXIT_FAILURE);
+		return send_data(data, length);
 	}
 	
 	cerr << "INFO: Received segment. " 
@@ -293,9 +310,7 @@ void ReliableSocket::send_data(const void *data, int length) {
 		//current segment is being acked	
 		if(ntohl(hdr->sequence_number) == sequence_number){
 			sequence_number++;
-		}
-		//add case for old ack
-		
+		}else return send_data(data, length);
 	}
 }
 
