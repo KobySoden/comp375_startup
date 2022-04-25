@@ -300,6 +300,10 @@ void ReliableSocket::send_data(const void *data, int length) {
 	}
 	//retry send
 	else {
+		int data_sent = 8*(int)ntohl(hdr->ack_number);
+		data += data_sent;
+		length -= data_sent;
+		cerr << "retry send. Other side received:" << data_sent << "bytes\n";
 		send_data(data, length);
 	}
 }
@@ -325,7 +329,7 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 	if (recv_count < 0) {
 		perror("receive_data recv");
 		// receive_data(buffer);
-		return 0;
+		return -1;
 	}
 	
 	//cloes connection sent
@@ -340,20 +344,20 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 		cerr << "Unexpected RDT Type Recieved\n";
 		//ask for a retransmission?
 		//receive_data(buffer);
-		return 0;
+		return -1;
 	}
 	//debug stuff
 	cerr << "expecting seq #: " << std::to_string(expected_sequence_number) << "\n";
 	
 	//printout recieved packet
-	cerr << "INFO: Received segment. " 
+	cerr << "\nINFO: Received segment. " 
 		 << "seq_num = "<< ntohl(hdr->sequence_number) << ", "
 		 << "ack_num = "<< ntohl(hdr->ack_number) << ", "
 		 << "type = " << hdr->type << ", "
 		 << "recv = " << std::to_string(recv_count) << "\n";
 
 	//wrong sequence #
-	int recv_data_size = 0;
+	int recv_data_size = -1;
 	if(ntohl(hdr->sequence_number) != expected_sequence_number){
 		//if sequence number recieved is old ack the packet
 		if (ntohl(hdr->sequence_number) < expected_sequence_number){	
@@ -364,7 +368,7 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 		else {
 			//return for now
 			cerr << "Wrong sequence number\n";
-			return 0;
+			return -1;
 		}
 	}else{	
 		//update sequence numbers
@@ -377,7 +381,7 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 	}
 
 	//ack the amount of data received
-	hdr->ack_number = htonl((size_t)recv_count - sizeof(RDTHeader));
+	hdr->ack_number = htonl(recv_count - sizeof(RDTHeader));
 	
 	//set header type to ack to send back
 	hdr->type = RDT_ACK;
