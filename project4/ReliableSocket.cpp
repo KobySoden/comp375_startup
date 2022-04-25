@@ -24,6 +24,7 @@
 #include "rdt_time.h"
 
 using std::cerr;
+using std::cout;
 
 /*
  * NOTE: Function header comments shouldn't go in this file: they should be put
@@ -96,11 +97,43 @@ void ReliableSocket::accept_connection(int port_num) {
 		cerr << "ERROR: Didn't get the expected RDT_CONN type.\n";
 		exit(EXIT_FAILURE);
 	}
+	
+	//increment syn by one and set it as the ack number
+	uint32_t ack = ntohl(hdr->sequence_number) + 1;
+	hdr->ack_number = htonl(ack);
 
-	// TODO: You should implement a handshaking protocol to make sure that
-	// both sides are correctly connected (e.g. what happens if the RDT_CONN
-	// message from the other end gets lost?)
-	// Note that this function is called by the connection receiver/listener.
+	//hardcode syn number for now
+	hdr->sequence_number = htonl(75);
+	//send new header back to host
+	if (send(this->sock_fd, hdr, sizeof(RDTHeader), 0) < 0) {
+         perror("syn/ack");
+		 exit(EXIT_FAILURE);
+	}
+	this->state = SYN_SENT;
+
+	//wait for response 
+	recv_count = recvfrom(this->sock_fd, segment, MAX_SEG_SIZE, 0, 
+								(struct sockaddr*)&fromaddr, &addrlen);		
+	if (recv_count < 0) {
+		perror("accept recvfrom");
+		exit(EXIT_FAILURE);
+	}
+		
+	//new ack should be old syn+1
+	if (ntohl(hdr->ack_number) != 75 + 1){
+		cerr << "Ack Number is wrong\n";
+		//shouldnt exit here we should send the syn again or something like
+		//that
+		exit(EXIT_FAILURE);	
+	}
+
+
+	//Debug Stuff
+	cerr <<"Reciever\n";
+	for(int i = 0; i < MAX_SEG_SIZE; i++){
+		cerr << std::to_string(segment[i]);
+	}
+	cerr <<"\n";
 
 	this->state = ESTABLISHED;
 	cerr << "INFO: Connection ESTABLISHED\n";
@@ -131,18 +164,51 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 	// Send an RDT_CONN message to remote host to initiate an RDT connection.
 	char segment[sizeof(RDTHeader)];
 	RDTHeader* hdr = (RDTHeader*)segment;
+	
+	//hardcoded syn num for now
+	long syncNum = 55;
 
 	hdr->ack_number = htonl(0);
-	hdr->sequence_number = htonl(0);
+	hdr->sequence_number = htonl(syncNum);
 	hdr->type = RDT_CONN;
 	if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
 		perror("conn1 send");
 	}
+	this->state = SYN_SENT;
 
-	// TODO: Again, you should implement a handshaking protocol for the
-	// connection setup.
-	// Note that this function is called by the connection initiator.
 	
+	// Wait for a syn/ack from  a remote host
+	memset(segment, 0, sizeof(RDTHeader));
+
+	unsigned int addrlen = sizeof(addr);
+	int recv_count = recvfrom(this->sock_fd, segment, sizeof(RDTHeader), 0, 
+								(struct sockaddr*)&addr, &addrlen);		
+	if (recv_count < 0) {
+		perror("accept recvfrom");
+		exit(EXIT_FAILURE);
+	}
+
+	//compare recieved syn with sent syn+1
+	if (ntohl(hdr->ack_number) != syncNum+1){
+		//add new state here maybe
+		cerr << "Syn/Ack not recieved correctly retry\n";
+		//shouldnt exit here we should retry sending syn or something
+		exit(EXIT_FAILURE);
+	}
+
+	//increment syn by 1 and send it back as ack
+	hdr->ack_number = htonl(ntohl(hdr->sequence_number) + 1);
+	if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
+		perror("conn2 send");
+	}
+
+	//Debug Stuff
+	cerr <<"Sender\n";
+	for(int i = 0; i < sizeof(RDTHeader); i++){
+		cerr << std::to_string(segment[i]);
+	}
+	cerr <<"\n";
+
 	this->state = ESTABLISHED;
 	cerr << "INFO: Connection ESTABLISHED\n";
 }
