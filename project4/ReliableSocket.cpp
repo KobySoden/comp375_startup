@@ -48,7 +48,10 @@ ReliableSocket::ReliableSocket() {
 
 	this->state = INIT;
 }
-
+void PrintSegment(char * segment, int size){
+	for(int i =0; i < size; i++) cerr << std::to_string(segment[i]);
+	cerr << "\n";
+}
 void ReliableSocket::accept_connection(int port_num) {
 	if (this->state != INIT) {
 		cerr << "Cannot call accept on used socket\n";
@@ -97,7 +100,9 @@ void ReliableSocket::accept_connection(int port_num) {
 		cerr << "ERROR: Didn't get the expected RDT_CONN type.\n";
 		exit(EXIT_FAILURE);
 	}
-	
+	//assume header is valid
+	this->state = SYN_RECIEVED;
+
 	//increment syn by one and set it as the ack number
 	uint32_t ack = ntohl(hdr->sequence_number) + 1;
 	hdr->ack_number = htonl(ack);
@@ -137,6 +142,9 @@ void ReliableSocket::accept_connection(int port_num) {
 
 	this->state = ESTABLISHED;
 	cerr << "INFO: Connection ESTABLISHED\n";
+	
+	//might want to change this to start at our syn numbers from before 
+	this->expected_sequence_number = 0;
 }
 
 void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
@@ -195,6 +203,7 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 		//shouldnt exit here we should retry sending syn or something
 		exit(EXIT_FAILURE);
 	}
+	this->state = SYN_RECIEVED;
 
 	//increment syn by 1 and send it back as ack
 	hdr->ack_number = htonl(ntohl(hdr->sequence_number) + 1);
@@ -251,6 +260,7 @@ void ReliableSocket::send_data(const void *data, int length) {
 	// 	header (i.e. hdr+1).
 	memcpy(hdr+1, data, length);
 	
+	//start timer for rtt here	
 	if (send(this->sock_fd, segment, sizeof(RDTHeader)+length, 0) < 0) {
 		perror("send_data send");
 		exit(EXIT_FAILURE);
@@ -261,8 +271,25 @@ void ReliableSocket::send_data(const void *data, int length) {
 	// resending until that ack comes.
 	// Utilize the set_timeout_length function to make sure you timeout after
 	// a certain amount of waiting (so you can try sending again).
+	
+	//wait for response on timeout resend packet	
+	int recv_count = recv(this->sock_fd, segment, MAX_SEG_SIZE, 0);
+	if (recv_count < 0) {
+		perror("receive_data recv");
+		exit(EXIT_FAILURE);
+	}
+	//end timer for rtt here
 
-	sequence_number++;
+	PrintSegment(segment, sizeof(RDTHeader));
+	
+	//check that recieved packet is type ACK and that we recieved the right
+	//ack number
+	if(hdr->type == RDT_ACK && ntohl(hdr->ack_number) == (long)length){
+		cerr << "we have an ACK!\n";
+		sequence_number += length;
+	}
+	//retry send
+	else send_data(data, length); 
 }
 
 
@@ -291,11 +318,51 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 	// received is the type you want (RDT_DATA) and has the right sequence
 	// number.
 
+	//check for sequence number and packet type
+	if(hdr->type != RDT_DATA){
+		cerr << "Unexpected RDT Type Recieved\n";
+		//ask for a retransmission
+	}
+
+	
+	//printout recieved packet
 	cerr << "INFO: Received segment. " 
 		 << "seq_num = "<< ntohl(hdr->sequence_number) << ", "
 		 << "ack_num = "<< ntohl(hdr->ack_number) << ", "
 		 << ", type = " << hdr->type << "\n";
+	
 
+	//wrong sequence #
+	if(ntohl(hdr->sequence_number) != expected_sequence_number){
+		cerr << "Wrong sequence number\n";
+		//if sequence number recieved is old ack the packet
+		if (ntohl(hdr->sequence_number) < expected_sequence_number){
+			//need to figure out how to ack the old packet if we are using
+			//cumulative ack maybe store the ack as the sequence number
+			hdr->ack_number = htonl(sequence_number);
+			cerr << "Acking old packet\n";
+		}
+	}
+	//we got the expected sequence #
+	else{
+		//cumulative ack
+		hdr->ack_number = htonl(sequence_number + recv_count -
+		sizeof(RDTHeader));
+	}
+	//set header type to ack to send back
+	hdr->type = RDT_ACK;
+	
+	//send ack
+	if (send(this->sock_fd, received_segment, sizeof(RDTHeader), 0) < 0) {
+		perror("send ack");
+		exit(EXIT_FAILURE);
+	}
+	
+	//update sequence numbers
+	sequence_number = ntohl(hdr->ack_number);
+	expected_sequence_number++;	
+
+	//copy data to buffer
 	int recv_data_size = recv_count - sizeof(RDTHeader);
 	memcpy(buffer, data, recv_data_size);
 
