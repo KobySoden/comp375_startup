@@ -337,46 +337,41 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 	
 	//wrong sequence #
 	if(ntohl(hdr->sequence_number) != expected_sequence_number){
-		cerr << "Wrong sequence number\n";
 		//if sequence number recieved is old ack the packet
-		if (ntohl(hdr->sequence_number) < expected_sequence_number){
-			//set ack number to data recieved
-			hdr->ack_number = htonl(recv_count - sizeof(RDTHeader));
-			
-			//
-
+		if (ntohl(hdr->sequence_number) < expected_sequence_number){	
+			//update sequence numbers
+			hdr->sequence_number = htonl(ntohl(hdr->sequence_number) - 1);	
 			cerr << "Acking old packet\n";
 		}
-		//return for now
-		cerr << "Wrong sequence number\n";
-		return 0;
-	}
-
-	//we got the expected sequence #
-	else{
-		//ack the amount of data received
-		hdr->ack_number = htonl(recv_count - sizeof(RDTHeader));
-		
+		else {
+			//return for now
+			cerr << "Wrong sequence number\n";
+			return 0;
+		}
+	}else{	
 		//update sequence numbers
-		sequence_number += ntohl(hdr->ack_number);
+		sequence_number += recv_count - sizeof(RDTHeader);
 		expected_sequence_number = sequence_number + 1;	//add 1 for unique seq	
 		hdr->sequence_number = htonl(sequence_number);
+	}
+
+	//ack the amount of data received
+	hdr->ack_number = htonl(recv_count - sizeof(RDTHeader));
 	
-		//set header type to ack to send back
-		hdr->type = RDT_ACK;
+	//set header type to ack to send back
+	hdr->type = RDT_ACK;
 	
-		//send ack
-		if (send(this->sock_fd, received_segment, sizeof(RDTHeader), 0) < 0) {
-			perror("send ack");
-			exit(EXIT_FAILURE);
+	//send ack
+	if (send(this->sock_fd, received_segment, sizeof(RDTHeader), 0) < 0) {
+		perror("send ack");
+		exit(EXIT_FAILURE);
 		}
 	
-		//copy data to buffer
-		int recv_data_size = recv_count - sizeof(RDTHeader);
-		memcpy(buffer, data, recv_data_size);
+	//copy data to buffer
+	int recv_data_size = recv_count - sizeof(RDTHeader);
+	memcpy(buffer, data, recv_data_size);
 
-		return recv_data_size;
-	}
+	return recv_data_size;
 }
 
 void ReliableSocket::close_connection() {

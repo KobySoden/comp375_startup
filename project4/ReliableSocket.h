@@ -21,7 +21,7 @@ struct RDTHeader {
 
 // TODO: Again, you'll likely need to add new statuses (is that a word?) as
 // you start implementing the reliable protocol.
-enum connection_status {INIT, SYN_SENT, SYN_RECIEVED, ESTABLISHED, CLOSED };
+enum connection_status {INIT, SYN_SENT, SYN_RECIEVED, ESTABLISHED, CLOSED};
 
 /**
  * Class that represents a socket using a reliable data transport protocol.
