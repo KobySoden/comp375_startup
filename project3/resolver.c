@@ -15,7 +15,7 @@
 #define MAX_QUERY_SIZE 1024
 #define MAX_RESPONSE_SIZE 4096
 #define DNS_HEADER_SIZE 12
-#define DEBUG true
+#define DEBUG false
 #define Atype 1
 #define MXtype 15
 
@@ -104,7 +104,8 @@ char ** getRootServers(char * file)
 	}
 
 	int lineCount = 0;
-	//read file line by line 
+
+	//read file line by line
 	while ((read = getline(&root_list[lineCount], &len, root_file)) != -1) {
 		lineCount++;
     }
@@ -280,7 +281,14 @@ char* recurseResolve(char *hostname, bool is_mx, char *destIp) {
 			free(response);
 			return ip;
 		}			
-		//else if (Answers[i].type == MXtype) return getIPFromRecord(Answers[i]);
+	//	else if (Answers[i].type == MXtype) 
+	//	{
+	//		char * ip = getIPFromRecord(Answers[i]);
+	//		free(Answers[i].data);
+	//		free(response);
+	//		return //I think this has to return the name version of the ip
+	//	}
+	
 	}		
 	if(head.a_count > 0) free(Answers[head.a_count-1].data);
 	
@@ -385,10 +393,6 @@ int main(int argc, char **argv) {
 	if(argc == 2){
 		isMX = false;
 		url = argv[1];
-	//	printf("\n%d\n", argv[1][((int)sizeof(argv[1])) - 1]);
-	//	printf("\n%d\n",(int)sizeof(argv[1]));
-	//	printf("\n%ld\n", (strlen(argv[1]))-1);
-	//	printf("\n%d\n", argv[1][strlen(argv[1])-1]);
 		
 	//if url does not start with a valid subdomain such as www, home, san, ole
 	//then print error messages
@@ -460,12 +464,14 @@ int main(int argc, char **argv) {
 		if (strcmp(argv[1], "-m") == 0) {
 			isMX = true;
 			url = argv[2];
-		//	printf("\n%d\n", argv[2][3]);
 
 			//handles when requesting for a Type MX record with a subdomain of www, home, san, ole when
 			//it should just be the domain. This checks the ascii of the
 			//characters
-			if ((argv[2][0] == 119 && argv[2][1] == 119 && argv[2][2] == 119)||(argv[1][0] == 104 && argv[1][1] == 111 && argv[1][2] == 109 && argv[1][3] == 101)||(argv[1][0] == 115 && argv[1][1] == 97 && argv[1][2] == 110)||(argv[1][0] == 111 && argv[1][1] == 108 && argv[1][2] == 101))
+			if ((argv[2][0] == 119 && argv[2][1] == 119 && argv[2][2] == 119)
+				||(argv[1][0] == 104 && argv[1][1] == 111 && argv[1][2] == 109 && argv[1][3] == 101)
+				||(argv[1][0] == 115 && argv[1][1] == 97 && argv[1][2] == 110)
+				||(argv[1][0] == 111 && argv[1][1] == 108 && argv[1][2] == 101))
 			{
 				printf("\nCannot resolve MX subdomain request (SOA), please try again with the domain hostname\n");
 				return 1;
@@ -479,27 +485,28 @@ int main(int argc, char **argv) {
 		//if url does not end in a valid TLD such as .com, .net, .edu, .gov, .ru, .io then print error
 		//messages
 		//This checks the ascii of the characters
-			if (argv[1][strlen(argv[1])-3] == 99 && argv[1][strlen(argv[1])-2] == 111 && argv[1][strlen(argv[1])-1] == 109)
+
+			if (argv[1][strlen(argv[2])] == 99 && argv[1][strlen(argv[2])+1] == 111 && argv[1][strlen(argv[2])+2] == 109)
 		 	{
 			//	continues if url ends in .com
 		    }
-			else if (argv[1][strlen(argv[1])-3] == 110 && argv[1][strlen(argv[1])-2] == 101 && argv[1][strlen(argv[1])-1] == 116)
+			else if (argv[1][strlen(argv[2])] == 110 && argv[1][strlen(argv[2])+1] == 101 && argv[1][strlen(argv[2])+2] == 116)
 			{
 			//	continues if url ends in .net
 			}	
-			else if (argv[1][strlen(argv[1])-3] == 101 && argv[1][strlen(argv[1])-2] == 100 && argv[1][strlen(argv[1])-1] == 117)
+			else if (argv[1][strlen(argv[2])] == 101 && argv[1][strlen(argv[2])+1] == 100 && argv[1][strlen(argv[2])+2] == 117)
 			{
 			//	continues if url ends in .edu
 			}
-			else if (argv[1][strlen(argv[1])-3] == 103 && argv[1][strlen(argv[1])-2] == 111 && argv[1][strlen(argv[1])-1] == 118)
+			else if (argv[1][strlen(argv[2])] == 103 && argv[1][strlen(argv[2])+1] == 111 && argv[1][strlen(argv[2])+2] == 118)
 			{
 			//	continues if url ends in .gov
 			}
-			else if (argv[1][strlen(argv[1])-2] == 114 && argv[1][strlen(argv[1])-1] == 117)
+			else if (argv[1][strlen(argv[2])+1] == 114 && argv[1][strlen(argv[2])+2] == 117)
 			{
 			//	continues if url ends in .ru 
 			}
-			else if (argv[1][strlen(argv[1])-2] == 105 && argv[1][strlen(argv[1])-1] == 111)
+			else if (argv[1][strlen(argv[2])+1] == 105 && argv[1][strlen(argv[2])+2] == 111)
 			{
 			// continues ir url ends in .io
 			}
