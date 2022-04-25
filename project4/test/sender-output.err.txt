@@ -1,0 +1,96 @@
+INFO: Connection ESTABLISHED
+INFO: Setting timeout to 10 ms
+0000005108275-5254
+we have an ACK!
+1
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+00010051082000
+we have an ACK!
+2
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+00020051082000
+we have an ACK!
+3
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+00030051082000
+we have an ACK!
+4
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+00040051082000
+we have an ACK!
+5
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+00050051082000
+we have an ACK!
+6
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+00060051082000
+we have an ACK!
+7
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+00070051082000
+we have an ACK!
+8
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+00080051082000
+we have an ACK!
+9
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+00090051082000
+we have an ACK!
+10
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+000100051082000
+we have an ACK!
+11
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+000110051082000
+we have an ACK!
+12
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+000120051082000
+we have an ACK!
+13
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+000130051082000
+we have an ACK!
+14
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+000140051082000
+we have an ACK!
+15
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+000150051082000
+we have an ACK!
+16
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+000160051082000
+we have an ACK!
+17
+sender: sent 1388 bytes of app data
+INFO: Setting timeout to 10 ms
+00017001412000
+we have an ACK!
+18
+sender: sent 297 bytes of app data
+
+Finished sending, closing socket.
+
+Sent 23893 bytes in 0.018572 seconds (1.28651e+06 Bps)
+Estimated RTT:  100 ms
