@@ -86,6 +86,7 @@ void ReliableSocket::accept_connection(int port_num) {
 	int recv_count = 0;	
 	uint32_t ack = 0;
 	
+	set_timeout_length(10);
 	while(1){	
 		//set_timeout_length(10);
 		switch(this->state){
@@ -198,6 +199,7 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 	long syncNum = 55;
 	int recv_count = 0;
 
+	set_timeout_length(10);
 	while(1){
 		
 		//set_timeout_length(10);
@@ -307,8 +309,9 @@ void ReliableSocket::RDTSend(const void *data, int length){
 	int recv_count = 0;
 	//state machine for send data
 	int state = SEND_DATA;
-	
+	set_timeout_length(10);
 	while(1){
+		cerr << "Current State: " << state << "\n";
 		switch(state){
 			case SEND_DATA:
 				//try to send data
@@ -374,9 +377,12 @@ int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
 	int recv_count = 0;
 	int	recv_data_size = 0;
 	
+	set_timeout_length(10);
+	
 	//state machine for receving data
 	int state = WAIT_FOR_DATA;
 	while(1){
+		cerr << "Current State: " <<  state << "\n";
 		switch(state){
 			case WAIT_FOR_DATA:		
 				recv_count = recv(this->sock_fd, received_segment, MAX_SEG_SIZE, 0);
@@ -403,9 +409,8 @@ int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
 					if(ntohl(hdr->length) != recv_count - sizeof(RDTHeader)){
 						state = WAIT_FOR_DATA;
 					}
-					//check if sequence number matches
-					else if(ntohl(hdr->sequence_number) ==
-						expected_sequence_number){
+				//check if sequence number matches
+				else if(ntohl(hdr->sequence_number) == expected_sequence_number){
 						//increment sequence numbers
 						sequence_number++;
 						expected_sequence_number++;
@@ -425,7 +430,7 @@ int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
 						cerr << "INFO: Data could not be verified\n";
 						state = WAIT_FOR_DATA;
 					}
-				}
+				}else state = WAIT_FOR_DATA;
 				break;
 			case SEND_ACK:
 				hdr->type = RDT_ACK;
