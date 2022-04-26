@@ -585,6 +585,9 @@ void ReliableSocket::close_connection() {
 				
 					if(ntohl(hdr->sequence_number) ==
 						this->expected_sequence_number){
+						//increment sequence numbers
+						sequence_number++;
+						expected_sequence_number++;
 						state = ACK_ACK;	
 					}
 
@@ -640,6 +643,15 @@ void ReliableSocket::receiver_close(){
 				//clear buffer
 				memset(segment, 0, sizeof(RDTHeader));
 				//TODO read in message
+				if(recv(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0){
+					cerr << "did not receive closing message\n";
+				}else if(hdr->type == RDT_CLOSE){
+					//expected sequence number
+					if(ntohl(hdr->sequence_number) == expected_sequence_number){
+						cerr << "Received closing message\n";
+						state = ACK_CLOSE;
+					}
+				}
 				break;
 			case ACK_CLOSE:	
 				//clear buffer
@@ -650,20 +662,41 @@ void ReliableSocket::receiver_close(){
 				hdr->ack_number = htonl(0);
 				hdr->type = RDT_CLOSE;
 				
+				if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
+					cerr << "Couldn't ack close\n";
+				}else{
+					cerr << "Acked close message\n";
+					state = RECEIVE_ACK_ACK;
+				}
 
 				break;
 			case RECEIVE_ACK_ACK:
 				//clear buffer
 				memset(segment, 0, sizeof(RDTHeader));
+				if (recv(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
+					cerr << "Did not receive ack ack\n";
+					//TODO timeout
+					state = ACK_CLOSE;
+				}else {
+					if(hdr->type == RDT_CLOSE && ntohl(hdr->sequence_number)
+						== expected_sequence_number){
+						cerr << "Verified close\n";
+						state = CLOSE;
+					}
+				}
 				
-				//TODO receive message 
 				break;
 			case CLOSE:
 				//TODO close connection
-
-				return;
+				if (close(this->sock_fd) < 0) {
+					cerr << "Couldn't close connection\n";
+				}
+				else{
+					cerr << "Connection closed\n";
+					this->state = CLOSED;
+					return;
+				}
 				break;
-
 		}
 
 
