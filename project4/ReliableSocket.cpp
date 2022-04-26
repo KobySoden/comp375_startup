@@ -96,8 +96,12 @@ void ReliableSocket::EWMA(int rtt){
 	this->dev_rtt = uint32_t((.75*this->dev_rtt) + (.25*std::abs(rtt -
 	this->estimated_rtt))); 
 	
+	//rtt printouts
+	cerr << "Estimated RTT: " << this->estimated_rtt << " Dev RTT: " <<
+	this->dev_rtt << "\n";
+
 	//set timeout value 
-	this->timeout = this->estimated_rtt + (this->dev_rtt);
+	this->timeout = this->estimated_rtt + (4*this->dev_rtt);
 	set_timeout_length((uint32_t)this->timeout);
 }
 
@@ -138,11 +142,11 @@ void ReliableSocket::accept_connection(int port_num) {
 				recv_count = recvfrom(this->sock_fd, segment,
 				sizeof(RDTHeader), 0, (struct sockaddr*)&fromaddr, &addrlen);		
 				if(recv_count < 0){
-					cerr << "Did not receive syn\n";
+					//cerr << "Did not receive syn\n";
 					had_timeout();
 				}else if(connect(this->sock_fd, (struct sockaddr*)&fromaddr,
 				addrlen)){
-					cerr << "Cannot conenct sockets\n";
+					cerr << "Cannot connect sockets\n";
 				}else{
 					if(hdr->type != RDT_CONN){
 						cerr << "ERROR: Didn't get the expected RDT_CONN type.\n";
@@ -178,14 +182,14 @@ void ReliableSocket::accept_connection(int port_num) {
 				recv_count = recv(this->sock_fd, segment,
 				sizeof(RDTHeader), 0);		
 				if(recv_count < 0){
-					cerr << "could not recieve ack for syn/ack\n";
+					//cerr << "could not recieve ack for syn/ack\n";
 					this->state = SYN_RECEIVED;
 				}else if(hdr->type == RDT_DATA) {
-					cerr << "missed the ack but sender is sending data\n";
+					//cerr << "missed the ack but sender is sending data\n";
 					this->state = ESTABLISHED;
 				}
 				else if(ntohl(hdr->ack_number) == 76){
-					cerr << "Received proper ack: "<< ntohl(hdr->ack_number)<< "\n";
+					//cerr << "Received proper ack: "<< ntohl(hdr->ack_number)<< "\n";
 					//stop rtt timer
 					rtt = current_msec() - rtt;
 					this->estimated_rtt = rtt;
@@ -193,12 +197,12 @@ void ReliableSocket::accept_connection(int port_num) {
 					this->state = ESTABLISHED;
 				}
 				else if(hdr->type == RDT_CONN){
-					cerr << "Received first syn message\n";
+					//cerr << "Received first syn message\n";
 					this->state = SYN_RECEIVED;
 				}
 					
 				else{
-					cerr << "Something weird happened\n";
+					//cerr << "Something weird happened\n";
 					this->state = INIT;
 				}
 
@@ -210,7 +214,8 @@ void ReliableSocket::accept_connection(int port_num) {
 			default:
 				break;
 		}
-	}	
+	}
+}
 
 void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 	if (this->state != INIT) {
@@ -265,11 +270,11 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 				
 				recv_count = recv(this->sock_fd, segment, sizeof(RDTHeader),0);			 
 				if (recv_count < 0) {
-					cerr << "Did not receive SYN/ACK from remote host\n";
+					//cerr << "Did not receive SYN/ACK from remote host\n";
 					this->state = INIT;
 				}else if(hdr->type != RDT_CONN || ntohl(hdr->ack_number) !=
 				syncNum +1){
-					cerr << "wrong sequence number received or wrong type of packet\n";
+					//cerr << "wrong sequence number received or wrong type of packet\n";
 					this->state = INIT;
 				}else {
 					//end rtt time
@@ -366,13 +371,14 @@ void ReliableSocket::RDTSend(const void *data, int length){
 				recv_count = recv(this->sock_fd, segment, sizeof(RDTHeader), 0);
 				rtt = current_msec() - rtt;
 				if(recv_count < 0){
-					cerr << "Did not receive an ack\n";
+					//cerr << "Did not receive an ack\n";
 					had_timeout();
 				}else if(hdr->type != RDT_ACK){
-					cerr << "Received Something but it wasn't an ack\n";
+					//cerr << "Received Something but it wasn't an ack\n";
 				}
 				else if(ntohl(hdr->sequence_number) == sequence_number){
-					cerr << "We got an ack for the right segment\n";
+					cerr << "Sucessfully sent sequence number: " <<
+					sequence_number << "\n";
 					sequence_number++;
 					//adjust rtt value
 					EWMA(rtt);
@@ -394,6 +400,9 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 }
 
 int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
+	cerr << "Waiting for sequence number: " << this->expected_sequence_number
+	<< "\n";
+	
 	char received_segment[MAX_SEG_SIZE];
 	memset(received_segment, 0, MAX_SEG_SIZE);
 	
@@ -421,10 +430,13 @@ int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
 				else{	
 					//end timer for rtt this comes from last segment 
 					if(this->receiver_rtt != 0){ 
+						//stop rtt timer and submit time to ewma
 						EWMA(current_msec() - this->receiver_rtt);
 						this->receiver_rtt = 0;
-					}else EWMA(this->estimated_rtt);
-							
+					}else{
+						//reset timeout value after timeout
+						EWMA(this->estimated_rtt);
+					}	
 					state = VERIFY_DATA;
 				}
 				break;
@@ -478,7 +490,7 @@ int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
 				if(send(this->sock_fd, received_segment, sizeof(RDTHeader), 0) < 0) {
 					cerr << "Cant Send ACK\n";
 				}
-
+				//start rtt timer
 				this->receiver_rtt = current_msec();
 				
 				return recv_data_size;
@@ -500,7 +512,8 @@ void ReliableSocket::close_connection() {
 		cerr << "Coneection already closed\n";
 		return;
 	}
-  
+  	cerr << "Closing Connection\n";
+
 	//call seperate function for receiver
 	if(this->state == RECEIVED_CLOSE)
 		return receiver_close(); 
@@ -528,7 +541,7 @@ void ReliableSocket::close_connection() {
 				}
 				else{
 					rtt = current_msec();
-					cerr << "Sent Close Packet\n";
+					//cerr << "Sent Close Packet\n";
 					state = WAIT_FOR_ACK;
 				}
 			
@@ -539,11 +552,11 @@ void ReliableSocket::close_connection() {
 				memset(segment, 0, sizeof(RDTHeader));
 		
 				if(recv(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0){
-					cerr << "Did not receive ack\n";
+					//cerr << "Did not receive ack\n";
 					had_timeout();
 					state = SEND_CLOSE;
 				}else if(hdr->type == RDT_CLOSE){
-					cerr << "Received ack for close message\n";
+					//cerr << "Received ack for close message\n";
 				
 					if(ntohl(hdr->sequence_number) ==
 						this->expected_sequence_number){
@@ -558,7 +571,7 @@ void ReliableSocket::close_connection() {
 					}
 
 				}else{
-					cerr << "received wrong kind of message\n";
+					//cerr << "received wrong kind of message\n";
 				}
 			break;
 		
@@ -572,10 +585,10 @@ void ReliableSocket::close_connection() {
 				hdr->type = RDT_CLOSE;
 			
 				if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
-					cerr << "Couldn't send ack ack\n";
+					//cerr << "Couldn't send ack ack\n";
 				}
 				else{
-					cerr << "Sent ack ack\n";	
+					//cerr << "Sent ack ack\n";	
 					state = CLOSE;
 				}
 			break;
@@ -611,11 +624,11 @@ void ReliableSocket::receiver_close(){
 				memset(segment, 0, sizeof(RDTHeader));
 				//read in message
 				if(recv(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0){
-					cerr << "did not receive closing message\n";
+					//cerr << "did not receive closing message\n";
 				}else if(hdr->type == RDT_CLOSE){
 					//expected sequence number
 					if(ntohl(hdr->sequence_number) == expected_sequence_number){
-						cerr << "Received closing message\n";
+						//cerr << "Received closing message\n";
 						//start rtt timer
 						rtt = current_msec();
 						state = ACK_CLOSE;
@@ -631,10 +644,10 @@ void ReliableSocket::receiver_close(){
 				hdr->type = RDT_CLOSE;
 				
 				if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
-					cerr << "Couldn't ack close\n";
+					//cerr << "Couldn't ack close\n";
 					state = CLOSE;
 				}else{
-					cerr << "Acked close message\n";
+					//cerr << "Acked close message\n";
 					state = RECEIVE_ACK_ACK;
 				}
 
@@ -644,13 +657,13 @@ void ReliableSocket::receiver_close(){
 				memset(segment, 0, sizeof(RDTHeader));
 				//read in message
 				if (recv(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
-					cerr << "Did not receive ack ack\n";
+					//cerr << "Did not receive ack ack\n";
 					had_timeout();
 					state = ACK_CLOSE;
 				}else {
 					if(hdr->type == RDT_CLOSE && ntohl(hdr->sequence_number)
 						== expected_sequence_number + 1){
-						cerr << "Verified close\n";
+						//cerr << "Verified close\n";
 						//end rtt timer
 						rtt = current_msec() - rtt;
 						EWMA(rtt);

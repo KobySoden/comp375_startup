@@ -6,8 +6,6 @@
  *
  */
 
-// TODO: You'll likely need to add some new types, as you start doing things
-// like updating accept_connection and close_connection.
 enum RDTMessageType : uint8_t {RDT_CONN, RDT_CLOSE, RDT_ACK, RDT_DATA};
 
 /**
@@ -20,8 +18,6 @@ struct RDTHeader {
 	RDTMessageType type;
 };
 
-// TODO: Again, you'll likely need to add new statuses (is that a word?) as
-// you start implementing the reliable protocol.
 enum connection_status {INIT, SYN_SENT, SYN_RECEIVED,
 ESTABLISHED, RECEIVED_CLOSE, CLOSED };
 
@@ -125,6 +121,7 @@ private:
 	 * Reliably recieves data using stop and wait with acks
 	 *
 	 * @param buffer stores data being received
+	 * @return number of bytes received
 	 */
 	 int RDTReceive(char *buffer);
 
