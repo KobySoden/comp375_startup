@@ -334,7 +334,7 @@ void ReliableSocket::send_data(const void *data, int length) {
 void ReliableSocket::RDTSend(const void *data, int length){
  	// Create the segment, which contains a header followed by the data.
 	char segment[MAX_SEG_SIZE];
-
+	memset(segment, 0, MAX_SEG_SIZE);
 	RDTHeader *hdr = (RDTHeader*)segment;
 	
 	//receive count for ack values
@@ -356,7 +356,7 @@ void ReliableSocket::RDTSend(const void *data, int length){
 				hdr->length = htonl(length);
 				memcpy(hdr+1, data, length);
 				
-				if(send(this->sock_fd, segment, sizeof(RDTHeader)+length, 0)<0){
+				if(send(this->sock_fd, segment, sizeof(RDTHeader) + length, 0)<0){
 					cerr << "couldn't send data\n";
 				}else{
 						
@@ -519,6 +519,8 @@ void ReliableSocket::close_connection() {
 		return receiver_close(); 
 
 	char segment[sizeof(RDTHeader)];
+	memset(segment, 0, sizeof(RDTHeader));
+	
 	RDTHeader* hdr = (RDTHeader*)segment;
 
 	this->expected_sequence_number = this->sequence_number + 1;
