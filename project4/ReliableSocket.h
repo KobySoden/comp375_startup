@@ -114,4 +114,7 @@ private:
 	 * Remember that only the comment and header line goes here. The
 	 * implementation should be in the .cpp file.
 	 */
+	 void RDTSend(const void *buffer, int length);
+
+	 int RDTReceive(char *buffer);
 };
