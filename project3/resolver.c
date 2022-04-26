@@ -282,7 +282,7 @@ char* recurseResolve(char *hostname, bool is_mx, char *destIp) {
 		}			
 		//else if (Answers[i].type == MXtype) return getIPFromRecord(Answers[i]);
 	}		
-	free(Answers[head.a_count-1].data);
+	if(head.a_count > 0) free(Answers[head.a_count-1].data);
 	
 	//make array of auth servers
 	DNSRecord AuthRecords[head.auth_count];
@@ -299,7 +299,7 @@ char* recurseResolve(char *hostname, bool is_mx, char *destIp) {
 			
 		// might need recursion here
 	}
-	free(AuthRecords[head.auth_count-1].data);
+	if(head.auth_count > 0) free(AuthRecords[head.auth_count-1].data);
 	
 	//make array of additional records this is where I found the ip for google
 	DNSRecord AddRecords[head.other_count];
@@ -327,7 +327,7 @@ char* recurseResolve(char *hostname, bool is_mx, char *destIp) {
 		}
 			
 	}
-	free(AddRecords[head.other_count-1].data);
+	if(head.other_count > 0) free(AddRecords[head.other_count-1].data);
 		
 	free(response);	
 	return NULL;
