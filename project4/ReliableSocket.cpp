@@ -39,6 +39,12 @@ using std::cout;
 #define SEND_ACK 		2
 #define SEND_OLD_ACK	3
 
+//Close states
+#define SEND_CLOSE		0
+//#define WAIT_FOR_ACK	1 //this is defined above already
+#define ACK_ACK			2
+#define CLOSE			3
+
 /*
  * NOTE: Function header comments shouldn't go in this file: they should be put
  * in the ReliableSocket header file.
@@ -225,7 +231,6 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 	addr.sin_family = AF_INET; 	// use IPv4
 	addr.sin_addr.s_addr = inet_addr(hostname);
 	addr.sin_port = htons(port_num); 
-	unsigned int addrlen = sizeof(addr);
 
 	/*
 	 * UDP isn't connection-oriented, but calling connect here allows us to
@@ -467,7 +472,7 @@ int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
 			case VERIFY_DATA:
 				
 				if(hdr->type == RDT_CLOSE){
-					this->state = CLOSED;
+					this->state = RECEIVED_CLOSE;
 					return 0;
 				}
 				else if(hdr->type == RDT_DATA){
@@ -532,24 +537,135 @@ int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
 	}
 }
 void ReliableSocket::close_connection() {
-	// Construct a RDT_CLOSE message to indicate to the remote host that we
-	// want to end this connection.
+	cerr << "State entering close_connection() = " << this->state << "\n";
+
+	//call seperate function for receiver
+	if(this->state == RECEIVED_CLOSE)
+		return receiver_close(); 
+
 	char segment[sizeof(RDTHeader)];
 	RDTHeader* hdr = (RDTHeader*)segment;
 
-	hdr->sequence_number = htonl(0);
-	hdr->ack_number = htonl(0);
-	hdr->type = RDT_CLOSE;
+	this->expected_sequence_number = this->sequence_number + 1;
 
-	if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
-		perror("close send");
+	
+	int state = SEND_CLOSE;
+
+	//state machine for closing
+	while(1){
+		switch(state){
+			case SEND_CLOSE:
+				//fill header
+				hdr->sequence_number = htonl(this->sequence_number);
+				hdr->ack_number = htonl(0);
+				hdr->type = RDT_CLOSE;
+			
+				//send close message	
+				if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
+					cerr << "Couldn't send close message\n";
+				}
+				else{
+					//TODO start rtt timer
+					cerr << "Sent Close Packet\n";
+					state = WAIT_FOR_ACK;
+				}
+			
+			break;
+		
+			case WAIT_FOR_ACK:
+				//clear buffer
+				memset(segment, 0, sizeof(RDTHeader));
+		
+				if(recv(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0){
+					cerr << "Did not receive ack\n";
+					//TODO timeout
+					state = SEND_CLOSE;
+				}else if(hdr->type == RDT_CLOSE){
+					cerr << "Received ack for close message\n";
+				
+					if(ntohl(hdr->sequence_number) ==
+						this->expected_sequence_number){
+						state = ACK_ACK;	
+					}
+
+				}else{
+					cerr << "received wrong kind of message\n";
+				}
+			break;
+		
+			case ACK_ACK:
+				//clear buffer
+				memset(segment, 0, sizeof(RDTHeader));
+			
+				//fill header
+				hdr->sequence_number = htonl(this->sequence_number);
+				hdr->ack_number = htonl(0);
+				hdr->type = RDT_CLOSE;
+			
+				if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
+					cerr << "Couldn't send ack ack\n";
+				}
+				else{
+					cerr << "Sent ack ack\n";	
+					state = CLOSE;
+				}
+			break;
+
+			case CLOSE:
+				if (close(this->sock_fd) < 0) {
+					cerr << "Couldn't close connection\n";
+				}
+				else{
+					cerr << "Connection closed\n";
+					this->state = CLOSED;
+					return;
+				}
+		
+			break;
+		}
 	}
 
-	// TODO: As with creating a connection, you need to add some reliability
-	// into closing the connection to make sure both sides know that the
-	// connection has been closed.
+}
 
-	if (close(this->sock_fd) < 0) {
-		perror("close_connection close");
+void ReliableSocket::receiver_close(){
+	int state = RECEIVE_CLOSE;
+
+	char segment[sizeof(RDTHeader)];
+	RDTHeader* hdr = (RDTHeader*)segment;
+	
+	//state machine 
+	while(1){
+		switch(state){
+			case RECEIVE_CLOSE:	
+				//clear buffer
+				memset(segment, 0, sizeof(RDTHeader));
+				//TODO read in message
+				break;
+			case ACK_CLOSE:	
+				//clear buffer
+				memset(segment, 0, sizeof(RDTHeader));
+				
+				//TODO fill header with correct values
+				hdr->sequence_number = htonl(this->sequence_number);
+				hdr->ack_number = htonl(0);
+				hdr->type = RDT_CLOSE;
+				
+
+				break;
+			case RECEIVE_ACK_ACK:
+				//clear buffer
+				memset(segment, 0, sizeof(RDTHeader));
+				
+				//TODO receive message 
+				break;
+			case CLOSE:
+				//TODO close connection
+
+				return;
+				break;
+
+		}
+
+
 	}
 }
