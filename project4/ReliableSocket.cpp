@@ -83,12 +83,11 @@ void ReliableSocket::had_timeout(){
 }
 
 void ReliableSocket::EWMA(int rtt){ 
-	cerr << "rtt: " << rtt << "\n";
-	//divide by 2 to fix innaccuracy
-	//rtt = rtt/2;
 	
+	//we modified the weights here to prioritize new readings more
 	this->estimated_rtt = uint32_t((.7 * this->estimated_rtt) + (.3 *
 	rtt));
+
 	//calculate new dev_rtt value
 	this->dev_rtt = uint32_t((.75*this->dev_rtt) + (.25*std::abs(rtt -
 	this->estimated_rtt))); 
@@ -96,8 +95,6 @@ void ReliableSocket::EWMA(int rtt){
 	//set timeout value 
 	this->timeout = this->estimated_rtt + (this->dev_rtt);
 	set_timeout_length((uint32_t)this->timeout);
-	cerr << "EWMA RTT: " << this->estimated_rtt << " DEV_RTT: " <<
-	this->dev_rtt << "\n";
 }
 
 void ReliableSocket::accept_connection(int port_num) {
@@ -145,13 +142,6 @@ void ReliableSocket::accept_connection(int port_num) {
 					if(hdr->type != RDT_CONN){
 						cerr << "ERROR: Didn't get the expected RDT_CONN type.\n";
 					}else{	
-						
-					//	cerr << "INFO: received segment. " 
-		 			//	<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
-		 			//	<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
-		 			//	<< "type = " << hdr->type << " length: " 
-					//	<< ntohl(hdr->length) << "\n";
-						
 						this->state = SYN_RECEIVED;
 					}	
 				}
@@ -166,13 +156,6 @@ void ReliableSocket::accept_connection(int port_num) {
 				//hardcode syn number for now
 				hdr->sequence_number = htonl(75);
 					
-				//cerr << "INFO: sent  segment. " 
-		 		//<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
-		 		//<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
-		 		//<< "type = " << hdr->type << " length: " 
-				//<< ntohl(hdr->length) << "\n";
-				
-
 				//send new header back to host
 				if (send(this->sock_fd, hdr, sizeof(RDTHeader), 0) < 0) {
          			cerr << "couldn't send  syn/ack\n";
@@ -214,11 +197,6 @@ void ReliableSocket::accept_connection(int port_num) {
 					this->state = INIT;
 				}
 
-
-				//cerr << "INFO: received segment. " 
-		 		//<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
-		 		//<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
-		 		//<< "type = " << hdr->type << "\n"; 
 				break;
 
 			case ESTABLISHED:
@@ -270,12 +248,6 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 				hdr->ack_number = htonl(0);
 				hdr->sequence_number = htonl(syncNum);
 				hdr->type = RDT_CONN;
-				//debug
-	//			cerr << "INFO: sending segment. " 
-	//	 		<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
-	//	 		<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
-	//	 		<< ", type = " << hdr->type << " length: " 
-	//			<< ntohl(hdr->length) << "\n";
 				
 				if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
 					cerr << "cannot send syn\n";
@@ -305,22 +277,11 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 					this->dev_rtt = rtt;
 					this->state = SYN_RECEIVED;
 				}
-	//			cerr << "INFO: received segment. " 
-	//	 		<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
-	//	 		<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
-	//	 		<< "type = " << hdr->type << " length: " 
-	//	 		<< ntohl(hdr->length) << "\n";
 				break;
 
 			case SYN_RECEIVED:
 				//increment syn by 1 and send it back as ack
-				hdr->ack_number = htonl(ntohl(hdr->sequence_number) + 1);
-				
-	//			cerr << "INFO: sent segment. " 
-	//	 		<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
-	//	 		<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
-	//	 		<< "type = " << hdr->type << " length: " 
-	//	 		<< ntohl(hdr->length) << "\n";
+				hdr->ack_number = htonl(ntohl(hdr->sequence_number) + 1);	
 				
 				if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
 					cerr << "Failed to respond to SYN\n";
@@ -381,10 +342,8 @@ void ReliableSocket::RDTSend(const void *data, int length){
 	int state = SEND_DATA;
 	set_timeout_length(this->timeout);
 	while(1){
-	//	cerr << "Current State: " << state << "\n";
 		switch(state){
 			case SEND_DATA:
-				//try to send data
 				// Fill in the header
 				hdr->sequence_number = htonl(sequence_number);
 				hdr->ack_number = htonl(0);
@@ -398,12 +357,6 @@ void ReliableSocket::RDTSend(const void *data, int length){
 						
 					//get current time for rtt
 					rtt = current_msec();
-					//cerr << "INFO: Sent segment. " 
-		 			//<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
-		 			//<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
-		 			//<< "type = " << hdr->type << " length: " 
-					//<< ntohl(hdr->length) << "\n";
-
 					state = WAIT_FOR_ACK;
 				}
 				break;
@@ -423,7 +376,6 @@ void ReliableSocket::RDTSend(const void *data, int length){
 					sequence_number++;
 					//adjust rtt value
 					EWMA(rtt);
-					cerr << "RTT: " << rtt << "\n";
 					return;
 				}
 				state = SEND_DATA;
@@ -458,7 +410,6 @@ int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
 	//state machine for receving data
 	int state = WAIT_FOR_DATA;
 	while(1){
-	//	cerr << "Current State: " <<  state << "\n";
 		switch(state){
 			case WAIT_FOR_DATA:	
 				
@@ -474,13 +425,7 @@ int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
 						EWMA(current_msec() - this->receiver_rtt);
 						this->receiver_rtt = 0;
 					}else EWMA(this->estimated_rtt);
-						
-	//				cerr << "INFO: Received segment. " 
-	//	 			<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
-	//	 			<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
-	//	 			<< "type = " << hdr->type << " length: " 
-	//				<< ntohl(hdr->length) << "\n";
-					
+							
 					state = VERIFY_DATA;
 				}
 				break;
@@ -535,7 +480,6 @@ int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
 					cerr << "Cant Send ACK\n";
 				}
 
-				//TODO add condition here if we cant send an ack	
 				this->receiver_rtt = current_msec();
 				
 				return recv_data_size;
@@ -557,8 +501,6 @@ void ReliableSocket::close_connection() {
 		cerr << "Coneection already closed\n";
 		return;
 	}
-
-	cerr << "State entering close_connection() = " << this->state << "\n";
 
 	//call seperate function for receiver
 	if(this->state == RECEIVED_CLOSE)
