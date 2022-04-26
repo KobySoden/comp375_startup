@@ -187,10 +187,8 @@ char* getIPFromRecord(DNSRecord record) {
 			free(str2);
 			return str;
 	}
-	
 
-char* recurseResolve(char *hostname, bool is_mx, char *server) {
-	printf("Sending your request to: %s\n", server);
+uint8_t * sendQuery(char *destIp, char* hostname, bool is_mx){	
 	// create a UDP (i.e. Datagram) socket
 	int sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sock < 0) {
@@ -211,18 +209,18 @@ char* recurseResolve(char *hostname, bool is_mx, char *server) {
 		perror("setsockopt");
 		exit(0);
 	}
+
+	// The following is the IP address of USD's local DNS server.
+	//in_addr_t nameserver_addr = inet_addr("172.16.7.15");
 	
-	in_addr_t nameserver_addr = inet_addr(server);
+	in_addr_t nameserver_addr = inet_addr(destIp);
+
 	
-	printf("Name Server ADDR: %d\n", nameserver_addr);
 	struct sockaddr_in addr; 	// internet socket address data structure
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(53); // port 53 for DNS
 	addr.sin_addr.s_addr = nameserver_addr; // destination address (any local for now)
 
-	// uint8_t is a standard, unsigned 8-bit value.
-	// You should use that type for all buffers used for sending to and
-	// receiving from the DNS server.
 	uint8_t query[MAX_QUERY_SIZE]; 
 	int query_len=construct_query(query, hostname, is_mx);
 
@@ -236,24 +234,35 @@ char* recurseResolve(char *hostname, bool is_mx, char *server) {
 
 	socklen_t len = sizeof(struct sockaddr_in);
 
-	uint8_t response[MAX_RESPONSE_SIZE];
-
+	//uint8_t response[MAX_RESPONSE_SIZE];
+	
+	uint8_t * response = (uint8_t *) malloc(MAX_RESPONSE_SIZE * sizeof(uint8_t));
 	/* Blocking calls will now return error (-1) after the timeout period with
 	 * errno set to EAGAIN. */
 	res = recvfrom(sock, response, MAX_RESPONSE_SIZE, 0, 
 					(struct sockaddr *)&addr, &len);
 
-	if(DEBUG) printf("Length of response: %d\n", res);
-	
 	if (res < 1) {
 		if (errno == EAGAIN) {
 			printf("Timed out!\n\n");
 		} else {
 			perror("recv");
+
 		}
 		return NULL;
 	}
+	return response;
 	
+}
+
+char* recurseResolve(char *hostname, bool is_mx, char *destIp) {
+	printf("Sending your request to: %s\n", destIp);
+
+	uint8_t *response = sendQuery(destIp, hostname, is_mx);
+	
+	if (response == NULL){
+		 return NULL;
+	}
 	//read the header into a struct
 	DNSHeader head = getHeader(response); 
 	
@@ -291,6 +300,13 @@ char* recurseResolve(char *hostname, bool is_mx, char *server) {
 		AuthRecords[i] = getRecord(response+recordIndex);
 		recordIndex += 12 + AuthRecords[i].datalen;
 		if(DEBUG) printf("index: %d\n ", recordIndex);	
+		
+		//entrypoint to recursion
+		if (AuthRecords[i].datalen == 4){ 
+			char * serverIp = getIPFromRecord(AuthRecords[i]);
+			char * ip = recurseResolve(hostname, is_mx, serverIp);
+			free(serverIp);
+		}
 	}
 	
 	//make array of additional records not sure if we need this but its easy
