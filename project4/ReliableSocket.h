@@ -95,6 +95,8 @@ private:
 	uint32_t expected_sequence_number;
 	int estimated_rtt;
 	int dev_rtt;
+	int timeout;
+	int receiver_rtt;
 	connection_status state;
 
 	// In the (unlikely?) event you need a new field, add it here.
@@ -117,4 +119,8 @@ private:
 	 void RDTSend(const void *buffer, int length);
 
 	 int RDTReceive(char *buffer);
+
+	 void EWMA(int rtt);
+		
+	 void had_timeout();
 };

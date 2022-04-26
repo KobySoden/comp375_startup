@@ -20,6 +20,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+//absolute value for devrtt
+#include <cmath>
+
 #include "ReliableSocket.h"
 #include "rdt_time.h"
 
@@ -44,9 +47,10 @@ using std::cout;
 ReliableSocket::ReliableSocket() {
 	this->sequence_number = 0;
 	this->expected_sequence_number = 0;
-	this->estimated_rtt = 100;
+	this->estimated_rtt = 10;
 	this->dev_rtt = 10;
-
+	this->timeout = estimated_rtt * dev_rtt;
+	this->receiver_rtt = 0;
 	// TODO: If you create new fields in your class, they should be
 	// initialized here.
 
@@ -55,8 +59,35 @@ ReliableSocket::ReliableSocket() {
 		perror("socket");
 		exit(EXIT_FAILURE);
 	}
+	set_timeout_length((uint32_t)timeout);
 
 	this->state = INIT;
+}
+
+void ReliableSocket::had_timeout(){
+	if(this->timeout < this->estimated_rtt * 5){
+		this->timeout = 1.5 * this->timeout;
+	}
+	cerr << "TIMEOUT!\n"; 
+	set_timeout_length((uint32_t)this->timeout);
+}
+
+void ReliableSocket::EWMA(int rtt){
+	cerr << "RTT: " << rtt << "\n";
+	cerr << "New RTT = " << .875*get_estimated_rtt() << " + " << 
+	.125*rtt << "\n";
+	//calculate new rtt 
+	this->estimated_rtt = uint32_t((.875 * get_estimated_rtt()) + (.125 *
+	rtt));
+	//calculate new dev_rtt value
+	this->dev_rtt = uint32_t((.75*this->dev_rtt) + (.25*std::abs(rtt -
+	this->estimated_rtt))); 
+	
+	//set timeout value 
+	this->timeout = this->estimated_rtt + (this->dev_rtt);
+	set_timeout_length((uint32_t)this->timeout);
+	cerr << "EWMA RTT: " << this->estimated_rtt << " DEV_RTT: " <<
+	this->dev_rtt << "\n";
 }
 
 void ReliableSocket::accept_connection(int port_num) {
@@ -86,7 +117,7 @@ void ReliableSocket::accept_connection(int port_num) {
 	int recv_count = 0;	
 	uint32_t ack = 0;
 	
-	set_timeout_length(10);
+	//set_timeout_length(this->timeout);
 	while(1){	
 		//set_timeout_length(10);
 		switch(this->state){
@@ -117,12 +148,21 @@ void ReliableSocket::accept_connection(int port_num) {
 				break;
 
 			case SYN_RECEIVED:	
+				
 				//increment syn by one and set it as the ack number
 				ack = ntohl(hdr->sequence_number) + 1;
 				hdr->ack_number = htonl(ack);
+				
 				//hardcode syn number for now
 				hdr->sequence_number = htonl(75);
 					
+				cerr << "INFO: sent  segment. " 
+		 		<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
+		 		<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
+		 		<< "type = " << hdr->type << " length: " 
+				<< ntohl(hdr->length) << "\n";
+				
+
 				//send new header back to host
 				if (send(this->sock_fd, hdr, sizeof(RDTHeader), 0) < 0) {
          			cerr << "couldn't send  syn/ack\n";
@@ -130,10 +170,14 @@ void ReliableSocket::accept_connection(int port_num) {
 				break;
 
 			case SYN_SENT:
+
+				memset(segment, 0, sizeof(RDTHeader));
+				
 				recv_count = recv(this->sock_fd, segment,
 				sizeof(RDTHeader), 0);		
 				if(recv_count < 0){
 					cerr << "could not recieve ack for syn/ack\n";
+					this->state = SYN_RECEIVED;
 				}else if(hdr->type == RDT_DATA) {
 					cerr << "missed the ack but sender is sending data\n";
 					this->state = ESTABLISHED;
@@ -199,7 +243,7 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 	long syncNum = 55;
 	int recv_count = 0;
 
-	set_timeout_length(10);
+	//set_timeout_length(this->timeout);
 	while(1){
 		
 		//set_timeout_length(10);
@@ -247,6 +291,13 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 			case SYN_RECEIVED:
 				//increment syn by 1 and send it back as ack
 				hdr->ack_number = htonl(ntohl(hdr->sequence_number) + 1);
+				
+				cerr << "INFO: sent segment. " 
+		 		<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
+		 		<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
+		 		<< "type = " << hdr->type << " length: " 
+		 		<< ntohl(hdr->length) << "\n";
+				
 				if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
 					cerr << "Failed to respond to SYN\n";
 				}else this->state = ESTABLISHED;
@@ -294,38 +345,35 @@ void ReliableSocket::RDTSend(const void *data, int length){
  	// Create the segment, which contains a header followed by the data.
 	char segment[MAX_SEG_SIZE];
 
-	// Fill in the header
 	RDTHeader *hdr = (RDTHeader*)segment;
-	//hdr->sequence_number = htonl(sequence_number);
-	//hdr->ack_number = htonl(0);
-	//hdr->type = RDT_DATA;
-	//add length of data to message header
-	//hdr->length = htonl(length);
-
-	// Copy the user-supplied data to the spot right past the header 
-	//memcpy(hdr+1, data, length);
 	
 	//receive count for ack values
 	int recv_count = 0;
+	
+	//variable for rtt
+	int rtt = 0;
+
 	//state machine for send data
 	int state = SEND_DATA;
-	set_timeout_length(10);
+	set_timeout_length(this->timeout);
 	while(1){
 		cerr << "Current State: " << state << "\n";
 		switch(state){
 			case SEND_DATA:
 				//try to send data
-				
+				// Fill in the header
 				hdr->sequence_number = htonl(sequence_number);
 				hdr->ack_number = htonl(0);
 				hdr->type = RDT_DATA;
 				hdr->length = htonl(length);
 				memcpy(hdr+1, data, length);
-
+				
 				if(send(this->sock_fd, segment, sizeof(RDTHeader)+length, 0)<0){
 					cerr << "couldn't send data\n";
 				}else{
-					
+						
+					//get current time for rtt
+					rtt = current_msec();
 					cerr << "INFO: Sent segment. " 
 		 			<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
 		 			<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
@@ -339,21 +387,28 @@ void ReliableSocket::RDTSend(const void *data, int length){
 			case WAIT_FOR_ACK:
 				//wait for response
 				recv_count = recv(this->sock_fd, segment, sizeof(RDTHeader), 0);
+				//calculate rtt
+				rtt = current_msec() - rtt;
+				
 				if(recv_count < 0){
 					cerr << "Did not receive an ack\n";
+					had_timeout();
 				}else if(hdr->type != RDT_ACK){
 					cerr << "Received Something but it wasn't an ack\n";
+					EWMA(rtt);
 				}
 				else if(ntohl(hdr->sequence_number) == sequence_number){
 					cerr << "We got an ack for the right segment\n";
 					sequence_number++;
+					//adjust rtt value
+					EWMA(rtt);
+					//	cerr << "RTT: " << rtt << "\n";
 					return;
 				}
 				state = SEND_DATA;
 				break;
 		}
 	}
-	return;
 }
 
 int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
@@ -377,80 +432,104 @@ int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
 	int recv_count = 0;
 	int	recv_data_size = 0;
 	
-	set_timeout_length(10);
-	
+	set_timeout_length(this->timeout);
+
 	//state machine for receving data
 	int state = WAIT_FOR_DATA;
 	while(1){
 		cerr << "Current State: " <<  state << "\n";
 		switch(state){
-			case WAIT_FOR_DATA:		
+			case WAIT_FOR_DATA:	
+				
+				//receive data	
 				recv_count = recv(this->sock_fd, received_segment, MAX_SEG_SIZE, 0);
 				if (recv_count < 0) {
-					cerr << "Nothing Received\n";
-				}else{
-					state = VERIFY_DATA;
+					//cerr << "Nothing Received\n";
+					had_timeout();
+				}
+				else{	
+					//end timer for rtt this comes from last segment 
+					if(this->receiver_rtt != 0){ 
+						EWMA(current_msec() - this->receiver_rtt);
+						this->receiver_rtt = 0;
+					}else EWMA(this->estimated_rtt);
 						
 					cerr << "INFO: Received segment. " 
 		 			<< "seq_num = "<< ntohl(hdr->sequence_number) << ", "
 		 			<< "ack_num = "<< ntohl(hdr->ack_number) << ", "
 		 			<< "type = " << hdr->type << " length: " 
 					<< ntohl(hdr->length) << "\n";
+					
+					state = VERIFY_DATA;
 				}
 				break;
 			
 			case VERIFY_DATA:
+				
 				if(hdr->type == RDT_CLOSE){
-					//cannot use this here apparently
 					this->state = CLOSED;
 					return 0;
-				}else if(hdr->type == RDT_DATA){
-					//full message not received
+				}
+				else if(hdr->type == RDT_DATA){
+					//corrupted packet
 					if(ntohl(hdr->length) != recv_count - sizeof(RDTHeader)){
+						this->receiver_rtt = 0;
 						state = WAIT_FOR_DATA;
 					}
-				//check if sequence number matches
+				//sequence number matches
 				else if(ntohl(hdr->sequence_number) == expected_sequence_number){
 						//increment sequence numbers
 						sequence_number++;
 						expected_sequence_number++;
 						
+						//save data to buffer
 						recv_data_size = recv_count - sizeof(RDTHeader);
 						memcpy(buffer, data, recv_data_size);
 						//send ack
 						state = SEND_ACK;
 					}
-					//ack old sequence numbers
+					//old sequence number
 					else if(ntohl(hdr->sequence_number) <
 						expected_sequence_number){
 						
+						this->receiver_rtt = 0;
 						state = SEND_OLD_ACK;
 					}	
 					else{
-						cerr << "INFO: Data could not be verified\n";
+						//cerr << "INFO: Data could not be verified\n";
+						this->receiver_rtt = 0;
 						state = WAIT_FOR_DATA;
 					}
-				}else state = WAIT_FOR_DATA;
+				}
+				else {
+					this->receiver_rtt = 0;
+					state = WAIT_FOR_DATA;
+				}
 				break;
+			
 			case SEND_ACK:
 				hdr->type = RDT_ACK;
 				
 				if(send(this->sock_fd, received_segment, sizeof(RDTHeader), 0) < 0) {
 					cerr << "Cant Send ACK\n";
 				}
+
+				//TODO add condition here if we cant send an ack	
+				this->receiver_rtt = current_msec();
+				
 				return recv_data_size;
 				break;
+			
 			case SEND_OLD_ACK:
 				hdr->type = RDT_ACK;
 
 				if(send(this->sock_fd, received_segment, sizeof(RDTHeader), 0) < 0) {
 					cerr << "Cant Send old ACK\n";
-				} 
+				}
 				state = WAIT_FOR_DATA;
 				break;
 		}
 	}
-	//return;
 }
 void ReliableSocket::close_connection() {
 	// Construct a RDT_CLOSE message to indicate to the remote host that we
