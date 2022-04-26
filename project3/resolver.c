@@ -227,8 +227,6 @@ uint8_t * sendQuery(char *destIp, char* hostname, bool is_mx){
 
 	socklen_t len = sizeof(struct sockaddr_in);
 
-	//uint8_t response[MAX_RESPONSE_SIZE];
-	
 	uint8_t * response = (uint8_t *) malloc(MAX_RESPONSE_SIZE * sizeof(uint8_t));
 	/* Blocking calls will now return error (-1) after the timeout period with
 	 * errno set to EAGAIN. */
@@ -271,15 +269,20 @@ char* recurseResolve(char *hostname, bool is_mx, char *destIp) {
 		Answers[i] = getRecord(response+recordIndex);
 		recordIndex += 12 + Answers[i].datalen;
 		if(DEBUG) printf("index: %d\n ", recordIndex);	
-	
+		
+		if(i < 0) free(Answers[i-1].data);
+			
 		// I think this is where we handle type: A = ipv4 AAAA = ipv6 MX= mail 
 		if (Answers[i].type == Atype)
 		{
 			char * ip = getIPFromRecord(Answers[i]); 
+			free(Answers[i].data);
+			free(response);
 			return ip;
 		}			
 		//else if (Answers[i].type == MXtype) return getIPFromRecord(Answers[i]);
 	}		
+	free(Answers[head.a_count-1].data);
 	
 	//make array of auth servers
 	DNSRecord AuthRecords[head.auth_count];
@@ -289,37 +292,44 @@ char* recurseResolve(char *hostname, bool is_mx, char *destIp) {
 		recordIndex += 12 + AuthRecords[i].datalen;
 		if(DEBUG) printf("index: %d\n", recordIndex);	
 		
-		//entrypoint to recursion
-	//	if (AuthRecords[i].datalen == 4){ 
-	//		char * serverIp = getIPFromRecord(AuthRecords[i]);
-	//		char * ip = recurseResolve(hostname, is_mx, serverIp);
-	//		free(serverIp);
-	//		if(ip != NULL) return ip;
-	//	}
+		
+		if(i > 0) {
+			free(AuthRecords[i-1].data);
+		}
+			
+		// might need recursion here
 	}
+	free(AuthRecords[head.auth_count-1].data);
 	
-	//make array of additional records not sure if we need this but its easy
-	//to add 
+	//make array of additional records this is where I found the ip for google
 	DNSRecord AddRecords[head.other_count];
 	for(int i = 0; i < head.other_count; i++){
 		if(DEBUG) printf("Record #: %d ", i);
 		AddRecords[i] = getRecord(response+recordIndex);
 		recordIndex += 12 + AddRecords[i].datalen;
 		if(DEBUG) printf("index: %d\n", recordIndex);
+		
+		if(i > 0) {
+			free(AddRecords[i-1].data);
+		}
+		
 		//entrypoint to recursion
 		if (AddRecords[i].datalen == 4){ 
 			char * serverIp = getIPFromRecord(AddRecords[i]);
 			char * ip = recurseResolve(hostname, is_mx, serverIp);
 			free(serverIp);
-			if(ip != NULL) return ip;
+			if(ip != NULL){ 
+				free(AddRecords[i].data);
+				free(response);
+				return ip;
+			}
+			free(ip);
 		}
 			
 	}
-	
-	freeRecords(Answers, head.a_count);
-	freeRecords(AuthRecords, head.auth_count);
-	freeRecords(AddRecords, head.other_count);
-	
+	free(AddRecords[head.other_count-1].data);
+		
+	free(response);	
 	return NULL;
 }
 
