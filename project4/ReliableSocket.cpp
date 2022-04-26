@@ -411,19 +411,17 @@ void ReliableSocket::RDTSend(const void *data, int length){
 			case WAIT_FOR_ACK:
 				//wait for response
 				recv_count = recv(this->sock_fd, segment, sizeof(RDTHeader), 0);
+				rtt = current_msec() - rtt;
 				if(recv_count < 0){
 					cerr << "Did not receive an ack\n";
 					had_timeout();
 				}else if(hdr->type != RDT_ACK){
 					cerr << "Received Something but it wasn't an ack\n";
-					//rtt = current_msec() - rtt;
-					//EWMA(rtt);
 				}
 				else if(ntohl(hdr->sequence_number) == sequence_number){
 					cerr << "We got an ack for the right segment\n";
 					sequence_number++;
 					//adjust rtt value
-					rtt = current_msec() - rtt;
 					EWMA(rtt);
 					cerr << "RTT: " << rtt << "\n";
 					return;
