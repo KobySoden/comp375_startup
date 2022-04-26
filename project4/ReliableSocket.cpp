@@ -82,16 +82,12 @@ void ReliableSocket::had_timeout(){
 	set_timeout_length((uint32_t)this->timeout);
 }
 
-void ReliableSocket::EWMA(int rtt){
-	//cerr << "RTT: " << rtt << "\n";
-	//cerr << "New RTT = " << .875*get_estimated_rtt() << " + " << 
-	//.125*rtt << "\n";
-	//calculate new rtt 
-
+void ReliableSocket::EWMA(int rtt){ 
+	cerr << "rtt: " << rtt << "\n";
 	//divide by 2 to fix innaccuracy
 	//rtt = rtt/2;
 	
-	this->estimated_rtt = uint32_t((.875 * get_estimated_rtt()) + (.125 *
+	this->estimated_rtt = uint32_t((.7 * this->estimated_rtt) + (.3 *
 	rtt));
 	//calculate new dev_rtt value
 	this->dev_rtt = uint32_t((.75*this->dev_rtt) + (.25*std::abs(rtt -
@@ -415,22 +411,21 @@ void ReliableSocket::RDTSend(const void *data, int length){
 			case WAIT_FOR_ACK:
 				//wait for response
 				recv_count = recv(this->sock_fd, segment, sizeof(RDTHeader), 0);
-				//calculate rtt
-				rtt = current_msec() - rtt;
-				
 				if(recv_count < 0){
 					cerr << "Did not receive an ack\n";
 					had_timeout();
 				}else if(hdr->type != RDT_ACK){
 					cerr << "Received Something but it wasn't an ack\n";
-					EWMA(rtt);
+					//rtt = current_msec() - rtt;
+					//EWMA(rtt);
 				}
 				else if(ntohl(hdr->sequence_number) == sequence_number){
 					cerr << "We got an ack for the right segment\n";
 					sequence_number++;
 					//adjust rtt value
+					rtt = current_msec() - rtt;
 					EWMA(rtt);
-					//	cerr << "RTT: " << rtt << "\n";
+					cerr << "RTT: " << rtt << "\n";
 					return;
 				}
 				state = SEND_DATA;
