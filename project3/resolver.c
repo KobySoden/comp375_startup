@@ -30,13 +30,12 @@ DNSHeader getHeader(uint8_t *response){
 	head.other_count = (response[10]<<8)+response[11];
 	
 	if(DEBUG){		
-		printf("flags: %x\n", head.flags);
-		printf("questions: %x\n", head.q_count);
-		printf("answer rr's: %x\n", head.a_count);
-		printf("authority rr's: %x\n", head.auth_count);
-		printf("additional rr's: %x\n", head.other_count);
-	}
-	
+		printf("flags: %x ", head.flags);
+		printf("questions: %d ", head.q_count);
+		printf("answer rr's: %d ", head.a_count);
+		printf("authority rr's: %d ", head.auth_count);
+		printf("additional rr's: %d\n", head.other_count);
+	}	
 	return head;
 }
 
@@ -49,25 +48,19 @@ DNSRecord getRecord(uint8_t *response){
 	record.ttl = (response[6]<<24) + (response[7]<<16) + (response[8]<<8) + response[9];
 	record.datalen = (response[10]<<8) + response[11];
 
-	//TODO populate record.data using datalen the data startss at response[12]
-	//and goes until response[12+datalen]
-	//need to figure out how to store data section
-	//
-	//not sure if this will store it properly because of the periods in the
-	//address
 	record.data = (uint8_t*) malloc(record.datalen * sizeof(uint8_t));
-	if (DEBUG) printf("record data: ");
+	if (DEBUG) printf("data: ");
 	for (int i = 0; i < record.datalen; i++){
 		record.data[i] = response[12+i];
 		if (DEBUG && record.datalen == 4) printf("%03d.", record.data[i]);
 		if (DEBUG && record.datalen != 4) printf("%02x.", record.data[i]);
 	}	
 	if(DEBUG){
-		printf(" record name: %04x ",record.name);	
-		printf("record type: %04x ",record.type);
-		printf("record class: %04x ",record.class);
-		printf("record ttl: %08x ",record.ttl);
-		printf("record datalen: %04x\n", record.datalen);
+		printf(" name: %04x ",record.name);	
+		printf("type: %04x ",record.type);
+		printf("class: %04x ",record.class);
+		printf("ttl: %08x ",record.ttl);
+		printf("datalen: %04x\n", record.datalen);
 	}
 	return record;
 }
@@ -167,7 +160,6 @@ int construct_query(uint8_t* query, char* hostname, bool isMX) {
 	*class = htons(1);
 	query_len += 2;
 	
-	printf("query length: %d\n\n", query_len); 
 	return query_len;
 }
 
@@ -185,6 +177,7 @@ char* getIPFromRecord(DNSRecord record) {
 			}
 
 			free(str2);
+			//free str at some point after it has been used
 			return str;
 	}
 
@@ -211,7 +204,7 @@ uint8_t * sendQuery(char *destIp, char* hostname, bool is_mx){
 	}
 
 	// The following is the IP address of USD's local DNS server.
-	//in_addr_t nameserver_addr = inet_addr("172.16.7.15");
+	//in_addr_t nameserver_addr = inet_addr("172.16.7.15\n");
 	
 	in_addr_t nameserver_addr = inet_addr(destIp);
 
@@ -244,7 +237,7 @@ uint8_t * sendQuery(char *destIp, char* hostname, bool is_mx){
 
 	if (res < 1) {
 		if (errno == EAGAIN) {
-			printf("Timed out!\n\n");
+			perror("Timed out!");
 		} else {
 			perror("recv");
 
@@ -282,13 +275,8 @@ char* recurseResolve(char *hostname, bool is_mx, char *destIp) {
 		// I think this is where we handle type: A = ipv4 AAAA = ipv6 MX= mail 
 		if (Answers[i].type == Atype)
 		{
-			 if(DEBUG){
-				 char * ip = getIPFromRecord(Answers[i]); 
-				 printf("We found the IP! %s", ip);
-				 free(ip);
-			 	 exit(0);
-			 }
-			 return getIPFromRecord(Answers[i]);
+			char * ip = getIPFromRecord(Answers[i]); 
+			return ip;
 		}			
 		//else if (Answers[i].type == MXtype) return getIPFromRecord(Answers[i]);
 	}		
@@ -299,33 +287,39 @@ char* recurseResolve(char *hostname, bool is_mx, char *destIp) {
 		if(DEBUG) printf("Record #: %d ", i);
 		AuthRecords[i] = getRecord(response+recordIndex);
 		recordIndex += 12 + AuthRecords[i].datalen;
-		if(DEBUG) printf("index: %d\n ", recordIndex);	
+		if(DEBUG) printf("index: %d\n", recordIndex);	
 		
 		//entrypoint to recursion
-		if (AuthRecords[i].datalen == 4){ 
-			char * serverIp = getIPFromRecord(AuthRecords[i]);
-			char * ip = recurseResolve(hostname, is_mx, serverIp);
-			free(serverIp);
-		}
+	//	if (AuthRecords[i].datalen == 4){ 
+	//		char * serverIp = getIPFromRecord(AuthRecords[i]);
+	//		char * ip = recurseResolve(hostname, is_mx, serverIp);
+	//		free(serverIp);
+	//		if(ip != NULL) return ip;
+	//	}
 	}
 	
 	//make array of additional records not sure if we need this but its easy
 	//to add 
-	DNSRecord AddRecords[head.other_count];	
+	DNSRecord AddRecords[head.other_count];
 	for(int i = 0; i < head.other_count; i++){
 		if(DEBUG) printf("Record #: %d ", i);
 		AddRecords[i] = getRecord(response+recordIndex);
 		recordIndex += 12 + AddRecords[i].datalen;
-		if(DEBUG) printf("index: %d\n ", recordIndex);	
+		if(DEBUG) printf("index: %d\n", recordIndex);
+		//entrypoint to recursion
+		if (AddRecords[i].datalen == 4){ 
+			char * serverIp = getIPFromRecord(AddRecords[i]);
+			char * ip = recurseResolve(hostname, is_mx, serverIp);
+			free(serverIp);
+			if(ip != NULL) return ip;
+		}
+			
 	}
 	
 	freeRecords(Answers, head.a_count);
 	freeRecords(AuthRecords, head.auth_count);
 	freeRecords(AddRecords, head.other_count);
 	
-
-	//we need to call this same function the the ip addresses of the auth
-	//responses
 	return NULL;
 }
 
@@ -343,7 +337,6 @@ char* recurseResolve(char *hostname, bool is_mx, char *destIp) {
  *   resolved, NULL will be returned.
  */
 char* resolve(char *hostname, bool is_mx) {
-	//this will probably be moved but its here for testing
 	char ** root_list = getRootServers("root-servers.txt");
 	
 	if (is_mx == false) {
@@ -352,149 +345,17 @@ char* resolve(char *hostname, bool is_mx) {
 	else {
 		printf("Requesting MX record for %s\n", hostname);
 	}
-
-	// create a UDP (i.e. Datagram) socket
-	int sock = socket(AF_INET, SOCK_DGRAM, 0);
-	if (sock < 0) {
-		perror("socket");
-		exit(0);
+	
+	char * ip = NULL;
+	int i = 0;
+	while(ip == NULL){
+		ip =  recurseResolve(hostname, is_mx, root_list[i]);
+		i++; 
 	}
-	// Create a time value structure and set it to five seconds.
-	struct timeval tv;
-	memset(&tv, 0, sizeof(struct timeval));
-	tv.tv_sec = 5;
-
-	/* Tell the OS to use that time value as a time out for operations on
-	 * our socket. */
-	int res = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv,
-			sizeof(struct timeval));
-
-	if (res < 0) {
-		perror("setsockopt");
-		exit(0);
-	}
-
-	// The following is the IP address of USD's local DNS server. It is a
-	// placeholder only (i.e. you shouldn't have this hardcoded into your final
-	// program).
-	//in_addr_t nameserver_addr = inet_addr("172.16.7.15");
-	
-	//in_addr_t nameserver_addr = inet_addr("198.41.0.4");
-	
-	in_addr_t nameserver_addr = inet_addr(root_list[0]);
-
-	
-	struct sockaddr_in addr; 	// internet socket address data structure
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(53); // port 53 for DNS
-	addr.sin_addr.s_addr = nameserver_addr; // destination address (any local for now)
-
-	// uint8_t is a standard, unsigned 8-bit value.
-	// You should use that type for all buffers used for sending to and
-	// receiving from the DNS server.
-	uint8_t query[MAX_QUERY_SIZE]; 
-	int query_len=construct_query(query, hostname, is_mx);
-
-	int send_count = sendto(sock, query, query_len, 0,
-							(struct sockaddr*)&addr, sizeof(addr));
-
-	if (send_count<0) { 
-		perror("Send failed");
-		exit(1);
-	}
-
-	socklen_t len = sizeof(struct sockaddr_in);
-
-	uint8_t response[MAX_RESPONSE_SIZE];
-
-	/* Blocking calls will now return error (-1) after the timeout period with
-	 * errno set to EAGAIN. */
-	res = recvfrom(sock, response, MAX_RESPONSE_SIZE, 0, 
-					(struct sockaddr *)&addr, &len);
-
-	if (res < 1) {
-		if (errno == EAGAIN) {
-			printf("Timed out!\n\n");
-		} else {
-			perror("recv");
-		}
-	}
-
-	// TODO: The server's response will be located in the response array for you
-	// to further process and extract the needed information.
-	// Remember that DNS is a binary protocol: if you try printing out response
-	// as a string, it won't work correctly.
-	
-	//read the header into a struct
-	DNSHeader head = getHeader(response); 
-	
-	//12 = size of header
-	int nameLen = getNameLength(response+DNS_HEADER_SIZE);
-	//+4 for type and class this is where the first record is located in the
-	//response
-	int	recordIndex = DNS_HEADER_SIZE + nameLen + 4;		
-	
-	DNSRecord Answers[head.a_count];
-	for(int i = 0; i < head.a_count; i++){
-		if(DEBUG) printf("Record #: %d ", i);
-		Answers[i] = getRecord(response+recordIndex);
-		recordIndex += 12 + Answers[i].datalen;
-		//if(DEBUG) printf("index: %d\n ", recordIndex);	
-	
-		
-		// I think this is where we handle type: A = ipv4 AAAA = ipv6 MX= mail
-		// server CNAME = canonical name 
-		if (Answers[i].type == Atype) return getIPFromRecord(Answers[i]);
-					
-		//else if (Answers[i].type == MXtype) return getIPFromRecord(Answers[i]);
-	}		
-	
-	//make array of auth servers
-	DNSRecord AuthRecords[head.auth_count];
-	for(int i = 0; i < head.auth_count; i++){
-		if(DEBUG) printf("Record #: %d ", i);
-		AuthRecords[i] = getRecord(response+recordIndex);
-		recordIndex += 12 + AuthRecords[i].datalen;
-		//if(DEBUG) printf("index: %d\n ", recordIndex);
-		
-		
-		//entrypoint to recursion
-		if (AuthRecords[i].datalen == 4){ 
-			char * serverIp = getIPFromRecord(AuthRecords[i]);
-			char * ip = recurseResolve(hostname, is_mx, serverIp);
-			free(serverIp);
-		}
-	}
-	
-	//make array of additional records not sure if we need this but its easy
-	//to add 
-	DNSRecord AddRecords[head.other_count];	
-	for(int i = 0; i < head.other_count; i++){
-		if(DEBUG) printf("Record #: %d ", i);
-		AddRecords[i] = getRecord(response+recordIndex);
-		recordIndex += 12 + AddRecords[i].datalen;
-		//if(DEBUG) printf("index: %d\n ", recordIndex);	
-	}
-	
-	freeRecords(Answers, head.a_count);
-	freeRecords(AuthRecords, head.auth_count);
-	freeRecords(AddRecords, head.other_count);
-
-	int k = 0;
-	while(root_list[k] != 0){	 
-		char *ip_all = recurseResolve(hostname, is_mx, root_list[k]);
-		k+=1;	
-	}
-	for (int i = 0; i < 128; i++){
-		free(root_list[i]);	
-	}
+	//need to free root list before returning
+	for(int i = 0; i < 128; i++) free(root_list[i]);
 	free(root_list);
-
-//	while(root_list[k] != NULL && recurseResolve(hostname, is_mx, root_list[k]) == NULL) k++;	
-	//we need to call this same function the the ip addresses of the auth
-	//responses
-
-	return NULL;
+	return ip;
 }
 
 void printErrorMessages() {
