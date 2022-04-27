@@ -282,7 +282,7 @@ void ReliableSocket::send_data(const void *data, int length) {
 //	PrintSegment(segment, sizeof(RDTHeader));
 	
 	//check that recieved packet is type ACK and that we recieved the right
-	//ack number
+	//ack number might need to add another conditional for seq #
 	if(hdr->type == RDT_ACK && ntohl(hdr->ack_number) == (long)length){
 		cerr << "we have an ACK!\n";
 		sequence_number = ntohl(hdr->sequence_number) + 1;
@@ -312,16 +312,18 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 		perror("receive_data recv");
 		exit(EXIT_FAILURE);
 	}
+	
+	//cloes connection sent
+	if(hdr->type == RDT_CLOSE){
+		cerr << "RDT_CLOSE Recieved\n";
+		//this->state = 
+		return 0;
+	}
 
-	// TODO: You should send back some sort of acknowledment that you
-	// received some data, but first you'll need to make sure that what you
-	// received is the type you want (RDT_DATA) and has the right sequence
-	// number.
-
-	//check for sequence number and packet type
+	//check for data transmission
 	if(hdr->type != RDT_DATA){
 		cerr << "Unexpected RDT Type Recieved\n";
-		//ask for a retransmission
+		//ask for a retransmission?
 		return 0;
 	}
 	//debug stuff
@@ -335,45 +337,42 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 	
 	//wrong sequence #
 	if(ntohl(hdr->sequence_number) != expected_sequence_number){
-		cerr << "Wrong sequence number\n";
 		//if sequence number recieved is old ack the packet
-		if (ntohl(hdr->sequence_number) < expected_sequence_number){
-			//need to figure out how to ack the old packet if we are using
-			//cumulative ack maybe store the ack as the sequence number
-			hdr->ack_number = htonl(sequence_number);
+		if (ntohl(hdr->sequence_number) < expected_sequence_number){	
+			//update sequence numbers
+			hdr->sequence_number = htonl(ntohl(hdr->sequence_number) - 1);	
 			cerr << "Acking old packet\n";
 		}
-		//return for now
-		return 0;
-	}
-
-	//we got the expected sequence #
-	else{
-		//ack the amount of data received
-		hdr->ack_number = htonl(recv_count - sizeof(RDTHeader));
-		
+		else {
+			//return for now
+			cerr << "Wrong sequence number\n";
+			return 0;
+		}
+	}else{	
 		//update sequence numbers
-		sequence_number += ntohl(hdr->ack_number);
+		sequence_number += recv_count - sizeof(RDTHeader);
 		expected_sequence_number = sequence_number + 1;	//add 1 for unique seq	
 		hdr->sequence_number = htonl(sequence_number);
+	}
+
+	//ack the amount of data received
+	hdr->ack_number = htonl(recv_count - sizeof(RDTHeader));
 	
-		//set header type to ack to send back
-		hdr->type = RDT_ACK;
+	//set header type to ack to send back
+	hdr->type = RDT_ACK;
 	
-		//send ack
-		if (send(this->sock_fd, received_segment, sizeof(RDTHeader), 0) < 0) {
-			perror("send ack");
-			exit(EXIT_FAILURE);
+	//send ack
+	if (send(this->sock_fd, received_segment, sizeof(RDTHeader), 0) < 0) {
+		perror("send ack");
+		exit(EXIT_FAILURE);
 		}
 	
-		//copy data to buffer
-		int recv_data_size = recv_count - sizeof(RDTHeader);
-		memcpy(buffer, data, recv_data_size);
+	//copy data to buffer
+	int recv_data_size = recv_count - sizeof(RDTHeader);
+	memcpy(buffer, data, recv_data_size);
 
-		return recv_data_size;
-	}
+	return recv_data_size;
 }
-
 
 void ReliableSocket::close_connection() {
 	// Construct a RDT_CLOSE message to indicate to the remote host that we
@@ -381,13 +380,16 @@ void ReliableSocket::close_connection() {
 	char segment[sizeof(RDTHeader)];
 	RDTHeader* hdr = (RDTHeader*)segment;
 
-	hdr->sequence_number = htonl(0);
+	hdr->sequence_number = sequence_number;
 	hdr->ack_number = htonl(0);
 	hdr->type = RDT_CLOSE;
 
 	if (send(this->sock_fd, segment, sizeof(RDTHeader), 0) < 0) {
 		perror("close send");
 	}
+
+	//wait for response should be a close message
+
 
 	// TODO: As with creating a connection, you need to add some reliability
 	// into closing the connection to make sure both sides know that the
