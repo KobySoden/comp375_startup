@@ -26,10 +26,14 @@
 #include <unistd.h>
 #include <stdbool.h>
 
+//header file that includes some forward delcared functions and also includes
+//some important functions that can perform string-DNS name conversions
 #include "dns.h"
 
 //defined a variable debug to make debugging easier and defined some constant values
 #define DEBUG false
+
+//defined constants
 #define MAX_QUERY_SIZE 1024
 #define MAX_RESPONSE_SIZE 4096
 
@@ -300,6 +304,7 @@ char* typeARequestHandler(char* hostname, bool is_mx, uint8_t* response, int res
 			free(record_answer.data);
 			return answer;
 		}
+
 		//checks if answer record is a type CNAME
 		else if (record_answer.type == 5) {
 			char* str_name = (char*)malloc(500*sizeof(char));
@@ -311,7 +316,7 @@ char* typeARequestHandler(char* hostname, bool is_mx, uint8_t* response, int res
 			return resolve(cname, is_mx);
 		}
 		
-		//handle error
+		//handle error if not A or NS record
 		else {
 			printf("\nERROR\nReceived a record answer not of type 1 (A) or type 5 (NS)\n");
 			exit(-1);
@@ -343,6 +348,7 @@ char* typeARequestHandler(char* hostname, bool is_mx, uint8_t* response, int res
 					}
 				}
 
+				//calls recurseResolve to continue recursively iterating through server hiearchy with next IP
 				answer = recurseResolve(hostname, is_mx, IP);
 				free(IP);
 
@@ -375,8 +381,11 @@ char* typeARequestHandler(char* hostname, bool is_mx, uint8_t* response, int res
 				if(newIP == NULL){
 					continue;
 				}
+
+				//calls recurseResolve to continue recursively iterating through server hiearchy with next IP
 				answer = recurseResolve(hostname, is_mx, newIP);
 				free(newIP);
+
 				if(answer != NULL){
 					free(record_answer.data);
 					free(response);
@@ -421,9 +430,11 @@ char* typeMXRequestHandler(char* hostname, bool is_mx, uint8_t* response, int re
 	char* answer;
 	DNSRecordAnswer record_answer;
 
+	//checks if there is an answer in the header
 	if(header.a_count > 0) {
 		record_answer = getRecordAnswer(response, response_index, record_answer, is_mx);
 
+		//checks if answer record is a type MX
 		if(record_answer.type == 15) {
 			char* str_name = (char*)malloc(500*sizeof(char));
 			getStringFromDNS(response, record_answer.data, str_name);
@@ -437,6 +448,8 @@ char* typeMXRequestHandler(char* hostname, bool is_mx, uint8_t* response, int re
 		}
 		response_index += 12 + record_answer.len_dns_name;
 	}
+
+	//checks if there is no answer in the header
 	else if(header.other_count > 0 && header.auth_count > 0) {
 		while(header.auth_count > 0) {
 			record_answer = getRecordAnswer(response, response_index, record_answer, false);
@@ -458,6 +471,7 @@ char* typeMXRequestHandler(char* hostname, bool is_mx, uint8_t* response, int re
 					}
 				}
 
+				//calls recurseResolve to continue recursively iterating through server hiearchy with next IP
 				answer = recurseResolve(hostname, is_mx, IP);
 				free(IP);
 
@@ -473,10 +487,13 @@ char* typeMXRequestHandler(char* hostname, bool is_mx, uint8_t* response, int re
 			free(record_answer.data);
 		}
 	}
+
+	//checks if there are no answers in the header or auth records
 	else if(header.auth_count > 0 && header.other_count == 0) {
 		while(header.auth_count > 0) {
 			record_answer = getRecordAnswer(response, response_index, record_answer, false);
 
+			//checks if answer record is a type NS
 			if(record_answer.type == 2) {
 				char* str_name = (char*)malloc((500)*sizeof(char));
 				char nsname[getStringFromDNS(response, record_answer.data, str_name)];
@@ -487,8 +504,11 @@ char* typeMXRequestHandler(char* hostname, bool is_mx, uint8_t* response, int re
 				if(newIP == NULL){
 					continue;
 				}
+
+				//calls recurseResolve to continue recursively iterating through server hiearchy with next IP
 				answer = recurseResolve(hostname, is_mx, newIP);
 				free(newIP);
+
 				if(answer != NULL){
 					free(record_answer.data);
 					free(response);
@@ -501,6 +521,8 @@ char* typeMXRequestHandler(char* hostname, bool is_mx, uint8_t* response, int re
 			header.auth_count--;
 		}
 	}
+
+	//handle if there is no answer record at all
 	else{
 		printf("\nERROR\n No answer record, no authoritative record");
 		exit(-1);
@@ -681,6 +703,7 @@ int main(int argc, char **argv) {
 		printf("Requesting and MX record for %s\n", argv[2]);
 		answer = resolve(argv[2], true);
 	}
+	//print user friendly messages if user trys to run program with incorrect
 	else {
 		printErrorMessages();	
 		exit(2);
@@ -693,6 +716,8 @@ int main(int argc, char **argv) {
 	else if (answer != NULL) {
 		printf("The name %s resolves to: %s\n", argv[1], answer);
 	}
+	//print user friendly messages if user trys to run program with incorrect
+	//format
 	else {
 		printErrorMessages();
 	}
