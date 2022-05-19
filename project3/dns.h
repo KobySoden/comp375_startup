@@ -5,6 +5,11 @@
 
 #include <stdint.h>
 
+//forward declaring these functions here; they are described more in detail in
+//resolver.c 
+char* resolve(char *hostname, bool is_mx);
+char* recurseResolve(char *hostname, bool is_mx, char* IP);
+
 /**
  * DNS header structure.
  * Most of the message is variable size, which means we can't declare them in
@@ -13,6 +18,20 @@
  * plus extra bytes to handle the variable sized data.
  * This approach is going to force you to do some pointer arithmetic though.
  */
+struct DNSRecordAnswer {
+	// first a variable sized name, then
+	uint8_t *name_answer;
+	uint16_t type;
+	uint16_t class;
+	uint32_t ttl;
+	uint16_t datalen;
+	// and then a variable sized data field
+	uint8_t *data;
+	int len_dns_name;
+} __attribute__((packed));
+
+typedef struct DNSRecordAnswer DNSRecordAnswer;
+
 struct DNSHeader {
 	uint16_t id, flags, q_count, a_count, auth_count, other_count;	
 	// variable number of questions
@@ -30,13 +49,13 @@ typedef struct DNSHeader DNSHeader;
  */
 struct DNSRecord {
 	// first a variable sized name, then
-	uint16_t name;
+	uint8_t *name;
 	uint16_t type;
 	uint16_t class;
-	uint32_t ttl;
-	uint16_t datalen;
+//	uint32_t ttl;
+//	uint16_t datalen;
 	// and then a variable sized data field
-	uint8_t *data;
+//	uint8_t *data;
 } __attribute__((packed));
 
 typedef struct DNSRecord DNSRecord;

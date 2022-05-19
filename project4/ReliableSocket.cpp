@@ -72,6 +72,10 @@ ReliableSocket::ReliableSocket() {
 
 	this->state = INIT;
 }
+void PrintSegment(char * segment, int size){
+	for(int i =0; i < size; i++) cerr << std::to_string(segment[i]);
+	cerr << "\n";
+}
 
 void ReliableSocket::had_timeout(){
 	//sets a cap on the timeout value
@@ -121,6 +125,7 @@ void ReliableSocket::accept_connection(int port_num) {
 	//declaring variables used in state machine
 	struct sockaddr_in fromaddr;
 	unsigned int addrlen = sizeof(fromaddr);
+
 	int recv_count = 0;	
 	uint32_t ack = 0;
 	int rtt = 0;
@@ -207,9 +212,6 @@ void ReliableSocket::accept_connection(int port_num) {
 		}
 	}	
 
-
-}
-
 void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 	if (this->state != INIT) {
 		cerr << "Cannot call connect_to_remote on used socket\n";
@@ -239,8 +241,7 @@ void ReliableSocket::connect_to_remote(char *hostname, int port_num) {
 	int recv_count = 0;
 	int rtt = 0;
 
-	while(1){
-		
+	while(1){	
 		switch(this->state){
 			case INIT:
 				// Send an RDT_CONN message to remote host to initiate an RDT connection.
@@ -326,7 +327,6 @@ void ReliableSocket::send_data(const void *data, int length) {
 	return RDTSend(data, length);
 }
 void ReliableSocket::RDTSend(const void *data, int length){
-	
  	// Create the segment, which contains a header followed by the data.
 	char segment[MAX_SEG_SIZE];
 
@@ -394,7 +394,6 @@ int ReliableSocket::receive_data(char buffer[MAX_DATA_SIZE]) {
 }
 
 int ReliableSocket::RDTReceive(char buffer[MAX_DATA_SIZE]){
-	
 	char received_segment[MAX_SEG_SIZE];
 	memset(received_segment, 0, MAX_SEG_SIZE);
 	
@@ -501,7 +500,7 @@ void ReliableSocket::close_connection() {
 		cerr << "Coneection already closed\n";
 		return;
 	}
-
+  
 	//call seperate function for receiver
 	if(this->state == RECEIVED_CLOSE)
 		return receiver_close(); 

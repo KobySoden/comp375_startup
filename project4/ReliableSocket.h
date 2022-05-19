@@ -25,6 +25,7 @@ struct RDTHeader {
 enum connection_status {INIT, SYN_SENT, SYN_RECEIVED,
 ESTABLISHED, RECEIVED_CLOSE, CLOSED };
 
+
 /**
  * Class that represents a socket using a reliable data transport protocol.
  * This socket uses a stop-and-wait protocol so your data is sent at a nice,
@@ -100,7 +101,7 @@ private:
 	int receiver_rtt;
 	connection_status state;
 
-	// In the (unlikely?) event you need a new field, add it here.
+	// In the (unlik:ely?) event you need a new field, add it here.
 
 	/**
 	 * Sets the timeout length of this connection.
