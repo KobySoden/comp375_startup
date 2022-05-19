@@ -22,7 +22,9 @@ struct RDTHeader {
 
 // TODO: Again, you'll likely need to add new statuses (is that a word?) as
 // you start implementing the reliable protocol.
-enum connection_status {INIT, SYN_SENT, SYN_RECIEVED, ESTABLISHED, CLOSED};
+enum connection_status {INIT, SYN_SENT, SYN_RECEIVED,
+ESTABLISHED, RECEIVED_CLOSE, CLOSED };
+
 
 /**
  * Class that represents a socket using a reliable data transport protocol.
@@ -95,6 +97,8 @@ private:
 	uint32_t expected_sequence_number;
 	int estimated_rtt;
 	int dev_rtt;
+	int timeout;
+	int receiver_rtt;
 	connection_status state;
 
 	// In the (unlik:ely?) event you need a new field, add it here.
@@ -109,9 +113,37 @@ private:
 	 */
 	void set_timeout_length(uint32_t timeout_length_ms);
 
-	/*
-	 * Add new member functions (i.e. methods) after this point.
-	 * Remember that only the comment and header line goes here. The
-	 * implementation should be in the .cpp file.
+	/**
+	 * Reliably sends data using stop and wait with acks
+	 *
+	 * @param buffer buffer containing the data to be sent
+	 * @param length length of the data to be sent
 	 */
+	 void RDTSend(const void *buffer, int length);
+	
+	/**
+	 * Reliably recieves data using stop and wait with acks
+	 *
+	 * @param buffer stores data being received
+	 */
+	 int RDTReceive(char *buffer);
+
+	/**
+	 * Exponential weighted moving average calculation for estiamted rtt and
+	 * deviation of rtt 
+	 *
+	 * @param rtt measured rtt from the last packet
+	 */	
+	 void EWMA(int rtt);
+	
+	/**	
+	 * increases timeout value when there has been a timeout
+	 *
+	 */
+	 void had_timeout();
+	
+	/*
+	 * function used to handle closing connection sequence for the reciever
+	 */
+	 void receiver_close();
 };
