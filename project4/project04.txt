@@ -1,32 +1,29 @@
 COMP 375 @ USD
 Project 4: Reliable Data Transport
 
-Update this file so that it contains the following info.
-Submissions where this file has not been completed will NOT be accepted (i.e.
-will receive a failing grade).
+1. Partner 1's FULL Name: Koby Soden
+   Partner 1's USD Email Address:ksoden@sandiego.edu
+   Partner 2's FULL Name: Patrick Sorys
+   Partner 2's USD Email Address: psorys@sandiego.edu
 
-1. Partner 1's FULL Name:
-   Partner 1's USD Email Address:
-   Partner 2's FULL Name:
-   Partner 2's USD Email Address:
-
-2. A typed copy of USD's academic integrity pledge, followed by each partners'
-   typed initials (as a way of "signing the pledge.").
-
-   The academic integrity pledge can be found on page 3 of
-   the document found here: https://www.sandiego.edu/conduct/documents/HonorCode.pdf
-   To be clear, it is the text that starts, "I pledge to demonstrate...".
+2. A typed copy of USD's academic integrity pledge
+I pledge to demonstrate personal and academic integrity in all matters with my fellow
+students, the faculty, and the administration here at USD. I promise to be honest and
+accountable for my actions; and to uphold the statutes of scholastic honesty to better
+myself and those around me. -KS -PS
 
 3. The estimated number of hours spent working on the project.
    Break this down into three categories:
-		- Time spent partner 1 spent working alone
-		- Time spent partner 2 spent working alone
-		- Time spent working together
+		- Time spent partner 1 spent working alone: 20 hours
+		- Time spent partner 2 spent working alone: 2 hours
+		- Time spent working together: 10 hours
 
 4. A list of missing features and/or known bugs.
+NA
 
 5. Did you need to spend a project buck on this project to get a one week
-   deadline extension? (y/n)
+   deadline extension? Yes
 
 6. Any feedback you with to give me relating the project (e.g. Was it
    interesting? How could it be improved?)
+   I wish we had more guidance on the rtt time calculation and how vbox simulates a network. It was hard to determine if our rtt time was accurate when we didnt know what it should look like
